@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - VERSION
+      - .github/workflows/release.yml
 
 concurrency:
   group: release-${{ github.ref }}
@@ -44,9 +45,11 @@ jobs:
           REVISION: ${{ github.sha }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          existing_revision="$(
-            gh api "repos/${REPOSITORY}/git/ref/tags/${VERSION}" --jq '.object.sha' 2>/dev/null || true
-          )"
+          if ! existing_revision="$(
+            gh api "repos/${REPOSITORY}/git/ref/tags/${VERSION}" --jq '.object.sha' 2>/dev/null
+          )"; then
+            existing_revision=""
+          fi
           if [[ -n "$existing_revision" && "$existing_revision" != "$REVISION" ]]; then
             echo "Tag ${VERSION} already points to ${existing_revision}" >&2
             exit 1
