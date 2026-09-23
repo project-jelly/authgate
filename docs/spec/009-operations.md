@@ -454,6 +454,17 @@ CIMD 메타데이터 내용 오류 (client_id 불일치, 필수 필드 누락 �
 
 ## 일상 운영
 
+### 컨테이너 이미지 검증
+
+공식 이미지는 `authgate` 비특권 사용자로 실행하며 `/health`를 Docker
+`HEALTHCHECK`로 사용한다. Dockerfile과 로컬 Compose의 기반 이미지는 태그와
+digest를 함께 고정하고 Dependabot이 digest 변경을 제안한다.
+
+릴리스 워크플로는 멀티 아키텍처 이미지와 함께 SBOM 및 SLSA provenance를
+GHCR에 게시하고, GitHub OIDC로 이미지 digest에 대한 artifact attestation을
+발급한다. 배포 자동화는 가변 `latest` 태그 대신 릴리스 digest를 사용하고
+attestation을 검증한 뒤 승격해야 한다.
+
 ### 유저 정지
 
 ```sql
