@@ -41,6 +41,9 @@ func (p *resourceBindingPolicy) ValidateAuthorizeRequest(ctx context.Context, cl
 			if requestResource == "" {
 				return &oidc.Error{ErrorType: "invalid_target", Description: "missing resource"}
 			}
+			if !client.IsResourceAllowed(requestResource) {
+				return &oidc.Error{ErrorType: "invalid_target", Description: "resource not allowed for this client"}
+			}
 		} else {
 			if requestResource != "" {
 				return &oidc.Error{ErrorType: "invalid_target", Description: "resource parameter not permitted for this client"}
@@ -62,6 +65,12 @@ func (p *resourceBindingPolicy) ValidateTokenRequest(ctx context.Context, client
 				return &oidc.Error{ErrorType: "invalid_grant", Description: "persisted resource binding invalid for client channel"}
 			}
 			return &oidc.Error{ErrorType: "invalid_target", Description: "resource parameter not permitted for this client"}
+		}
+		// Stored resource on an mcp client must still be in the allowlist.
+		if err == nil && client != nil && client.LoginChannel == "mcp" && storedResource != "" {
+			if !client.IsResourceAllowed(storedResource) {
+				return &oidc.Error{ErrorType: "invalid_grant", Description: "persisted resource binding not allowed for this client"}
+			}
 		}
 	}
 	return p.base.ValidateTokenRequest(ctx, clientID, storedResource, requestResource)

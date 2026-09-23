@@ -42,7 +42,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(ctx context.Context, request op.T
 		return "", "", time.Time{}, err
 	}
 
-	derived := s.initialRefreshTokenAttributes(request)
+	derived := s.initialRefreshTokenAttributes(ctx, request)
 	var parentID uuid.NullUUID
 	graceChild := false
 	if currentRefreshToken != "" {
@@ -99,7 +99,7 @@ type refreshTokenAttributes struct {
 	scopes   []string
 }
 
-func (s *Storage) initialRefreshTokenAttributes(request op.TokenRequest) refreshTokenAttributes {
+func (s *Storage) initialRefreshTokenAttributes(ctx context.Context, request op.TokenRequest) refreshTokenAttributes {
 	derived := refreshTokenAttributes{familyID: s.idgen.NewUUID(), userID: request.GetSubject(), scopes: request.GetScopes()}
 	switch r := request.(type) {
 	case *AuthRequestModel:
@@ -107,6 +107,12 @@ func (s *Storage) initialRefreshTokenAttributes(request op.TokenRequest) refresh
 		derived.resource = r.Resource
 	case *op.DeviceAuthorizationState:
 		derived.clientID = r.ClientID
+		// Resource-bound Device grants carry the RFC 8707 resource in the
+		// request context. The token endpoint wraps it with WithResource
+		// before calling CreateAccessAndRefreshTokens, so we read it here
+		// rather than from DeviceAuthorizationState.Audience (which also
+		// drives the ID token aud and must stay client_id).
+		derived.resource = ResourceFromContext(ctx)
 	}
 	return derived
 }

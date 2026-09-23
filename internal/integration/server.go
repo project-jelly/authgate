@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -184,7 +185,16 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 				Name:              "MCP Test",
 				RedirectURIs:      []string{srv.URL + "/callback"},
 				AllowedScopes:     []string{"openid", "profile", "email", "offline_access"},
-				AllowedGrantTypes: []string{"authorization_code", "refresh_token"},
+				AllowedGrantTypes: []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"},
+			},
+			{
+				ClientID:          "mcp-device-client",
+				ClientType:        "public",
+				LoginChannel:      "mcp",
+				Name:              "MCP Device Test",
+				AllowedScopes:     []string{"openid", "profile", "email", "offline_access"},
+				AllowedGrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
+				AllowedResources:  []string{srv.URL + "/mcp"},
 			},
 		})
 	}
@@ -291,6 +301,24 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		}
 		tokenWithAtJWT.ServeHTTP(w, r.WithContext(storage.WithResource(r.Context(), resource)))
 	})))
+	deviceAuthorize := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resource, err := storage.ResourceFromRequestStrict(r)
+		if err != nil {
+			writeInvalidTargetError(w, err)
+			return
+		}
+		clientID := strings.TrimSpace(r.Form.Get("client_id"))
+		if clientID != "" && store != nil {
+			if err := store.ValidateAuthorizationResource(r.Context(), clientID, resource); err != nil {
+				if !errors.Is(err, storage.ErrNotFound) {
+					writeInvalidTargetError(w, err)
+					return
+				}
+			}
+		}
+		provider.ServeHTTP(w, r.WithContext(storage.WithResource(r.Context(), resource)))
+	})
+	mux.Handle("/oauth/device/authorize", tokenRateLimiter(middleware.TokenLogContext(deviceAuthorize)))
 	mux.Handle("/oauth/revoke", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !opts.EnableMCP {
 			provider.ServeHTTP(w, r)

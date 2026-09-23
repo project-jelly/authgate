@@ -11,6 +11,7 @@ CLI 도구나 입력 제한 장치에서 브라우저를 통해 인증하고 acc
 - 앱이 `clients.yaml`에 등록되어 있어야 함 (grant_type에 device_code 포함)
 - **성공적으로 Device 토큰을 발급받으려면** `user.Status = 'active'`여야 함 (Spec 001 경유, [ADR-000](../adr/000-authgate-identity.md) 정의)
 - 사용자가 브라우저 접근 가능해야 함
+- (선택) 리소스 바인딩이 필요한 CLI/MCP 도구는 `clients.yaml`에 `allowed_resources`를 명시해야 함 ([ADR-003](../adr/003-resource-bound-device-tokens.md))
 
 ## 관련 엔드포인트
 
@@ -18,12 +19,12 @@ CLI 도구나 입력 제한 장치에서 브라우저를 통해 인증하고 acc
 
 | Method | Path | 내부 처리 | 설명 |
 |--------|------|----------|------|
-| POST | `/oauth/device/authorize` | zitadel 라이브러리 | device_code + user_code 발급 |
+| POST | `/oauth/device/authorize` | zitadel 라이브러리 | device_code + user_code 발급. 리소스 바인딩 시 `resource` 파라미터 포함 |
 | GET | `/device` | authgate 핸들러 | user_code 입력 폼 |
 | GET | `/device?user_code=XXXX` | authgate 핸들러 | 승인/거부 페이지 (세션 필요) |
 | POST | `/device/approve` | authgate 핸들러 | 사용자 승인/거부 처리 |
 | GET | `/device/auth/callback` | authgate 핸들러 | Device 전용 IdP callback (state=user_code) |
-| POST | `/oauth/token` | zitadel 라이브러리 | grant_type=device_code → polling → 토큰 발급 |
+| POST | `/oauth/token` | zitadel 라이브러리 | grant_type=device_code → polling → 토큰 발급. 리소스 바인딩 시 동일 `resource` 필수 |
 
 **`/device/auth/callback`은 `/login/callback`과 별도 엔드포인트다.**
 브라우저 로그인의 `state=authRequestID`와 Device의 `state=user_code`가 섞이지 않는다.
@@ -192,6 +193,71 @@ SELECT ... FOR UPDATE → state 확인 → UPDATE
 
 상태 검사: `/device/auth/callback`(세션 생성 전)과 `approve` 두 시점 모두에서 [ADR-000](../adr/000-authgate-identity.md#채널별-상태-검사-규칙)의 규칙을 적용한다. `user.Status`가 `active`가 아니면 세션 생성/승인 불가 (403).
 
+## Resource-Bound Device Tokens
+
+일반 Device 토큰은 `aud = client_id`다. CLI/MCP 도구가 특정 protected resource용 토큰이 필요하면 `clients.yaml`에서 `allowed_resources`로 명시적으로 opt-in한다 ([ADR-003](../adr/003-resource-bound-device-tokens.md)).
+
+### 등록 규칙
+
+```yaml
+clients:
+  - client_id: mcp-cli
+    client_type: public
+    login_channel: mcp
+    name: MCP CLI
+    allowed_scopes: [openid, offline_access]
+    allowed_grant_types:
+      - "urn:ietf:params:oauth:grant-type:device_code"
+      - refresh_token
+    allowed_resources:
+      - "https://mcp.example.com"
+```
+
+- `allowed_resources`가 비어 있으면 해당 클라이언트는 resource-bound가 아니다 (기본값, 하위 호환).
+- `allowed_resources`는 `login_channel: browser` 클라이언트에 허용되지 않는다.
+- `allowed_resources`가 있는 클라이언트는 반드시 `device_code` grant를 포함하고 `authorization_code` grant를 포함해서는 안 된다.
+- `allowed_resources` 항목은 exact match로 비교한다.
+
+### 플로우
+
+```text
+POST /oauth/device/authorize
+  client_id=mcp-cli
+  scope=openid offline_access
+  resource=https://mcp.example.com
+
+→ 200 {device_code, user_code, verification_uri, ...}
+```
+
+승인 후 polling:
+
+```text
+POST /oauth/token
+  grant_type=urn:ietf:params:oauth:grant-type:device_code
+  device_code=...
+  client_id=mcp-cli
+  resource=https://mcp.example.com
+```
+
+- `/oauth/device/authorize`와 `/oauth/token` 모두 동일한 단일 `resource`를 포함해야 한다.
+- `resource` 누락/불일치/허용되지 않은 값은 `invalid_target` 400으로 거부한다.
+- `resource`가 두 번 이상 나타나면 `invalid_target` 400으로 거부한다 (single-audience policy).
+- 잘못된 `resource`로 인한 polling 거부는 device_code를 `consumed`로 바꾸지 않는다.
+
+### 토큰 의미
+
+| 토큰 | audience | 설명 |
+|------|----------|------|
+| access_token | `resource` | protected resource용 JWT |
+| id_token | `client_id` | OIDC Core audience는 client_id 그대로 |
+| refresh_token | opaque | `refresh_tokens.resource`에 동일 resource 저장 |
+
+refresh로 갱신하면 새 access_token의 `aud`는 동일 resource를 유지한다.
+
+### /userinfo, /oauth/introspect 경계
+
+resource-bound access_token은 일반 OIDC `aud=client_id` 토큰과 다른 용도이므로 `/userinfo`에서 거부한다. 리소스 서버는 JWKS로 서명·issuer·exp·aud/resource를 직접 검증해야 한다. 자세한 내용은 [Spec 005](005-token-lifecycle.md#userinfo와-introspection의-access-token-경계)를 참조한다.
+
 ## 보안 요구사항
 
 - device_code: 128bit 이상 엔트로피 (32 hex 또는 22 base64url). 추측 불가
@@ -199,6 +265,7 @@ SELECT ... FOR UPDATE → state 확인 → UPDATE
 - 만료된 device_code는 승인 불가 (`WHERE expires_at > NOW()`)
 - polling 간격 5초 강제 (`slow_down` 응답 시 +5초)
 - `consumed` 상태의 device_code는 재사용 불가
+- resource-bound device grant는 `/oauth/device/authorize`에서 허용된 resource로 바인딩되며, 승인 후 변경 불가
 
 ## 다른 스펙 참조
 

@@ -40,17 +40,25 @@ type ClientConfigEntry struct {
 	RedirectURIs             []string `yaml:"redirect_uris"`
 	AllowedScopes            []string `yaml:"allowed_scopes"`
 	AllowedGrantTypes        []string `yaml:"allowed_grant_types"`
+	// AllowedResources is the explicit opt-in allowlist for RFC 8707 protected
+	// resource indicators. Empty means the client is not resource-bound
+	// (backward-compatible aud=client_id for Device grants; unrestricted for
+	// legacy MCP clients). A non-empty list requires an exact match on every
+	// request that carries a resource parameter.
+	AllowedResources []string `yaml:"allowed_resources,omitempty"`
 	// Access restricts which accounts may use the client. nil (no access key)
 	// admits every account; so does the explicit "access: public".
 	Access *clientaccess.Policy `yaml:"access,omitempty"`
 }
 
 const (
-	maxYAMLClientIDLength    = 2048
-	maxYAMLClientNameLength  = 256
-	maxYAMLRedirectURICount  = 10
-	maxYAMLRedirectURILength = 2048
-	maxYAMLGrantTypeCount    = 3
+	maxYAMLClientIDLength        = 2048
+	maxYAMLClientNameLength      = 256
+	maxYAMLRedirectURICount      = 10
+	maxYAMLRedirectURILength     = 2048
+	maxYAMLGrantTypeCount        = 3
+	maxYAMLAllowedResourceCount  = 10
+	maxYAMLAllowedResourceLength = 2048
 )
 
 // LoadClientConfig reads and parses a clients.yaml file.
@@ -153,11 +161,36 @@ func LoadClientConfig(path string) (*ClientConfigFile, error) {
 		if len(c.Name) > maxYAMLClientNameLength {
 			return nil, fmt.Errorf("client[%d] %q: name exceeds %d chars", i, c.ClientID, maxYAMLClientNameLength)
 		}
-		if len(c.RedirectURIs) == 0 {
-			return nil, fmt.Errorf("client[%d] %q: at least one redirect_uri is required", i, c.ClientID)
+		if len(c.RedirectURIs) == 0 && containsString(c.AllowedGrantTypes, "authorization_code") {
+			return nil, fmt.Errorf("client[%d] %q: authorization_code grant requires at least one redirect_uri", i, c.ClientID)
 		}
 		if len(c.RedirectURIs) > maxYAMLRedirectURICount {
 			return nil, fmt.Errorf("client[%d] %q: redirect_uris exceeds %d entries", i, c.ClientID, maxYAMLRedirectURICount)
+		}
+		if len(c.AllowedResources) > 0 && c.LoginChannel == "browser" {
+			return nil, fmt.Errorf("client[%d] %q: allowed_resources is not permitted for browser-channel clients", i, c.ClientID)
+		}
+		if len(c.AllowedResources) > maxYAMLAllowedResourceCount {
+			return nil, fmt.Errorf("client[%d] %q: allowed_resources exceeds %d entries", i, c.ClientID, maxYAMLAllowedResourceCount)
+		}
+		for _, resource := range c.AllowedResources {
+			if strings.TrimSpace(resource) == "" {
+				return nil, fmt.Errorf("client[%d] %q: allowed_resources cannot contain empty value", i, c.ClientID)
+			}
+			if len(resource) > maxYAMLAllowedResourceLength {
+				return nil, fmt.Errorf("client[%d] %q: allowed_resources entry exceeds %d chars", i, c.ClientID, maxYAMLAllowedResourceLength)
+			}
+		}
+		// Resource-bound device clients require explicit opt-in via allowed_resources
+		// and must carry exactly one allowed resource. They also require the device_code
+		// grant so the resource policy has a token path to enforce.
+		if len(c.AllowedResources) > 0 {
+			if !containsString(c.AllowedGrantTypes, "urn:ietf:params:oauth:grant-type:device_code") {
+				return nil, fmt.Errorf("client[%d] %q: allowed_resources requires the device_code grant", i, c.ClientID)
+			}
+			if containsString(c.AllowedGrantTypes, "authorization_code") {
+				return nil, fmt.Errorf("client[%d] %q: resource-bound device client must not include authorization_code", i, c.ClientID)
+			}
 		}
 		for _, uri := range c.RedirectURIs {
 			if strings.TrimSpace(uri) == "" {
@@ -184,6 +217,15 @@ func LoadClientConfig(path string) (*ClientConfigFile, error) {
 	}
 
 	return &cfg, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // rejectEmptyAccess refuses an access key with no value. yaml.v3 decodes a null

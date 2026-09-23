@@ -132,6 +132,19 @@ func (s *Storage) SetPreviousKey(key *rsa.PrivateKey, keyID string) {
 // (they assert on rows this package writes); no production caller.
 func (s *Storage) DB() *sql.DB { return s.db }
 
+// ValidateAuthorizationResource applies the configured resource-binding policy
+// before an authorization grant is stored. The authorization_code path reaches
+// the same policy through CreateAuthRequest; the device authorization adapter
+// calls this explicitly because the upstream RFC 8628 request model does not
+// carry RFC 8707 extension parameters.
+func (s *Storage) ValidateAuthorizationResource(ctx context.Context, clientID, resource string) error {
+	client, err := s.ResolveClient(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	return s.resourcePolicy.ValidateAuthorizeRequest(ctx, client, resource)
+}
+
 // pii returns a codec bound to the current PII keys. It is a cheap value
 // wrapper, constructed per call so it always reflects the latest SetKeys.
 func (s *Storage) pii() piiCodec { return piiCodec{keys: s.keys} }

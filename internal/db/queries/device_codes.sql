@@ -1,9 +1,9 @@
 -- name: InsertDeviceCode :exec
-INSERT INTO device_codes (id, device_code, user_code, client_id, scopes, state, expires_at, created_at)
-VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7);
+INSERT INTO device_codes (id, device_code, user_code, client_id, resource, scopes, state, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8);
 
 -- name: GetDeviceAuthorizationForUpdate :one
-SELECT id, client_id, scopes, state, subject, expires_at, auth_time, last_polled_at
+SELECT id, client_id, COALESCE(resource, '') AS resource, scopes, state, subject, expires_at, auth_time, last_polled_at
 FROM device_codes
 WHERE device_code = $1 AND client_id = $2
 FOR UPDATE;
@@ -19,7 +19,7 @@ SET last_polled_at = $1
 WHERE id = $2;
 
 -- name: GetDeviceCodeByUserCode :one
-SELECT id, device_code, user_code, client_id, scopes, state, subject, expires_at, auth_time
+SELECT id, device_code, user_code, client_id, COALESCE(resource, '') AS resource, scopes, state, subject, expires_at, auth_time
 FROM device_codes
 WHERE user_code = $1;
 
