@@ -4,30 +4,8 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
     branches: [main]
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - "migrations/**"
-      - "internal/db/queries/**"
-      - "sqlc.yaml"
-      - "Makefile"
-      - ".golangci.yml"
-      - ".github/dependabot.yml"
-      - ".github/workflows/**"
   push:
     branches: [main]
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - "migrations/**"
-      - "internal/db/queries/**"
-      - "sqlc.yaml"
-      - "Makefile"
-      - ".golangci.yml"
-      - ".github/dependabot.yml"
-      - ".github/workflows/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,17 +16,16 @@ env:
 
 permissions:
   contents: read
-  actions: read
-  pull-requests: write
 
 jobs:
   fmt:
     name: Go Format
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -64,10 +41,11 @@ jobs:
   sqlc:
     name: SQLC
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -89,7 +67,7 @@ jobs:
           fi
 
       - name: sqlc generate
-        run: $(go env GOPATH)/bin/sqlc generate
+        run: '"$(go env GOPATH)/bin/sqlc" generate'
 
       - name: Verify generated files are up to date
         run: |
@@ -99,15 +77,16 @@ jobs:
           fi
 
       - name: sqlc vet
-        run: $(go env GOPATH)/bin/sqlc vet
+        run: '"$(go env GOPATH)/bin/sqlc" vet'
 
   test:
     name: Test
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -122,7 +101,7 @@ jobs:
         run: go test -coverprofile=coverage.out -tags=integration -timeout 20m ./internal/...
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: code-coverage
           path: coverage.out
@@ -130,10 +109,11 @@ jobs:
   race:
     name: Race
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -154,11 +134,13 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: code-coverage
       - name: Write coverage summary
@@ -169,17 +151,20 @@ jobs:
           fi
 
           TOTAL_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
-          echo "## Coverage Report" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Total coverage: ${TOTAL_COVERAGE}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Coverage Report"
+            echo ""
+            echo "- Total coverage: ${TOTAL_COVERAGE}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   vet:
     name: Go Vet
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -187,10 +172,11 @@ jobs:
   lint:
     name: GolangCI-Lint
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -201,15 +187,16 @@ jobs:
 
       - name: Run golangci-lint
         run: |
-          $(go env GOPATH)/bin/golangci-lint run ./...
+          "$(go env GOPATH)/bin/golangci-lint" run ./...
 
   vuln:
     name: Vulnerability Check
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
       - run: |
@@ -217,9 +204,6 @@ jobs:
           # the tool's own toolchain directive can downgrade to Go 1.25 and
           # fail to load this Go 1.26 module.
           GOTOOLCHAIN=local go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
-          # integration/test utility packages pull docker/testcontainers only for tests.
-          # Vulnerability checks here focus on runtime packages used in production code paths.
-          go list ./... \
-            | grep -v '/internal/testutil' \
-            | grep -v '/internal/integration' \
-            | xargs govulncheck
+          # Test and integration dependencies execute in CI and are part of the
+          # repository's supply chain, so scan them together with runtime code.
+          govulncheck ./...

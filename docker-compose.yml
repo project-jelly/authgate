@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     ports:
       - "5433:5432"
     environment:
@@ -14,7 +14,7 @@ services:
       retries: 10
 
   mock-idp:
-    image: ghcr.io/cagojeiger/mock-google-oidc:v0.3.0
+    image: ghcr.io/cagojeiger/mock-google-oidc:v0.3.0@sha256:b4ade126f493a32f8ae10de5fbeb8a2ee617c81b51450d709b4cae5598ed9ea8
     ports:
       - "8082:8082"
     environment:

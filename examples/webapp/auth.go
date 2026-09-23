@@ -13,24 +13,27 @@ import (
 )
 
 type AuthHandler struct {
-	sessions    *SessionStore
-	clientID    string
-	redirectURI string
-	authURL     string // browser-facing authorize URL
-	tokenURL    string // server-to-server token URL
-	userinfoURL string // server-to-server userinfo URL
-	scopes      []string
+	sessions     *SessionStore
+	clientID     string
+	redirectURI  string
+	authURL      string // browser-facing authorize URL
+	tokenURL     string // server-to-server token URL
+	userinfoURL  string // server-to-server userinfo URL
+	scopes       []string
+	cookieSecure bool
 }
 
 func NewAuthHandler(sessions *SessionStore, clientID, redirectURI, authURL, tokenURL, userinfoURL string) *AuthHandler {
+	redirect, _ := url.Parse(redirectURI)
 	return &AuthHandler{
-		sessions:    sessions,
-		clientID:    clientID,
-		redirectURI: redirectURI,
-		authURL:     authURL,
-		tokenURL:    tokenURL,
-		userinfoURL: userinfoURL,
-		scopes:      []string{"openid", "profile", "email", "offline_access"},
+		sessions:     sessions,
+		clientID:     clientID,
+		redirectURI:  redirectURI,
+		authURL:      authURL,
+		tokenURL:     tokenURL,
+		userinfoURL:  userinfoURL,
+		scopes:       []string{"openid", "profile", "email", "offline_access"},
+		cookieSecure: redirect != nil && redirect.Scheme == "https",
 	}
 }
 
@@ -50,7 +53,10 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Generate state
 	stateBytes := make([]byte, 16)
-	rand.Read(stateBytes)
+	if _, err := rand.Read(stateBytes); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
 	sess.State = state
@@ -62,6 +68,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    sid,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -177,6 +184,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		Value:    tokenResp.AccessToken,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   tokenResp.ExpiresIn,
 	})
@@ -191,8 +199,14 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear cookies
-	http.SetCookie(w, &http.Cookie{Name: "access_token", Path: "/", MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: "sid", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name: "access_token", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: h.cookieSecure, SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name: "sid", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: h.cookieSecure, SameSite: http.SameSiteLaxMode,
+	})
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -242,6 +256,7 @@ func (h *AuthHandler) RefreshAccessToken(w http.ResponseWriter, r *http.Request)
 		Value:    tokenResp.AccessToken,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   tokenResp.ExpiresIn,
 	})
