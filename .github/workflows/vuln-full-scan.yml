@@ -1,4 +1,4 @@
-name: Vulnerability Full Scan (Non-Blocking)
+name: Vulnerability Full Scan
 
 on:
   workflow_dispatch:
@@ -9,14 +9,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   full-vuln-scan:
     name: Full Vulnerability Scan
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -27,23 +32,26 @@ jobs:
           # fail to load this Go 1.26 module.
           GOTOOLCHAIN=local go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
 
-      - name: Run full govulncheck (non-blocking)
+      - name: Run full govulncheck
         id: vulnscan
-        continue-on-error: true
         run: |
           govulncheck ./... 2>&1 | tee govulncheck-full.txt
 
       - name: Upload full scan report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: govulncheck-full-report
           path: govulncheck-full.txt
 
       - name: Write summary
         if: always()
+        env:
+          SCAN_OUTCOME: ${{ steps.vulnscan.outcome }}
         run: |
-          echo "## Full Vulnerability Scan" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Scope: \`govulncheck ./...\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Blocking: no (informational workflow)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Result: ${{ steps.vulnscan.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Full Vulnerability Scan"
+            echo "- Scope: \`govulncheck ./...\`"
+            echo "- Blocking: yes"
+            echo "- Result: ${SCAN_OUTCOME}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       go-deps:
@@ -21,6 +23,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       gh-actions:
@@ -28,3 +32,66 @@ updates:
         update-types:
           - patch
           - minor
+
+  - package-ecosystem: gomod
+    directory: /examples/cli
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      example-cli-deps:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: gomod
+    directory: /examples/mcp-server
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      example-mcp-deps:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: gomod
+    directory: /examples/webapp
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      example-webapp-deps:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: docker
+    directory: /examples/webapp
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
