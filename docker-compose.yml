@@ -31,6 +31,8 @@ services:
       SESSION_SECRET: "test-session-secret-32chars-long!"
       PUBLIC_URL: http://localhost:8080
       DEV_MODE: "true"
+      # Local development only; production must mount a persistent signing key.
+      SIGNING_KEY_PATH: /tmp/signing_key.pem
       OIDC_ISSUER_URL: http://localhost:8082
       OIDC_INTERNAL_URL: http://mock-idp:8082
       OIDC_CLIENT_ID: authgate
@@ -46,7 +48,7 @@ services:
       mock-idp:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
+      test: ["CMD", "/authgate", "healthcheck"]
       interval: 3s
       timeout: 5s
       retries: 10

@@ -8,16 +8,15 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /authgate ./cmd/authgate/
 
-FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
 LABEL org.opencontainers.image.source="https://github.com/project-jelly/authgate"
-RUN apk add --no-cache ca-certificates \
-    && addgroup -S authgate \
-    && adduser -S -G authgate authgate
-COPY --from=builder --chown=authgate:authgate /authgate /authgate
-COPY --chown=authgate:authgate migrations/ /migrations/
+# Preserve relative configuration paths from the previous runtime image.
+WORKDIR /
+COPY --from=builder /authgate /authgate
+COPY migrations/ /migrations/
 
 EXPOSE 8080
-USER authgate
+USER 65532:65532
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -q -O - http://127.0.0.1:8080/health >/dev/null || exit 1
+  CMD ["/authgate", "healthcheck"]
 ENTRYPOINT ["/authgate"]

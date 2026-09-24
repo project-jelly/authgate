@@ -456,8 +456,23 @@ CIMD 메타데이터 내용 오류 (client_id 불일치, 필수 필드 누락 �
 
 ### 컨테이너 이미지 검증
 
-공식 이미지는 `authgate` 비특권 사용자로 실행하며 `/health`를 Docker
-`HEALTHCHECK`로 사용한다. Dockerfile과 로컬 Compose의 기반 이미지는 태그와
+공식 실행 이미지는 `gcr.io/distroless/static-debian13:nonroot`를 사용하며
+UID/GID `65532:65532`로 실행한다. Go 바이너리는 `CGO_ENABLED=0`으로 빌드하며,
+실행 이미지에는 CA 인증서가 포함되고 셸·패키지 관리자·`wget`은 없다.
+빌드 단계의 Go 이미지는 Alpine 기반을 유지한다.
+
+Docker `HEALTHCHECK`와 Compose는 `/authgate healthcheck`를 직접 실행한다.
+이 명령은 서버 설정이나 DB를 초기화하지 않고 `127.0.0.1:${PORT:-8080}/health`를
+검사한다. 제한 시간은 2초이며 HTTP 200일 때만 종료 코드 0을 반환한다.
+리디렉션, 연결 실패, 잘못된 포트 및 그 외 응답은 종료 코드 1을 반환한다.
+Kubernetes의 HTTP `/health`·`/ready` probe는 그대로 사용할 수 있다.
+
+작업 디렉터리는 기존처럼 `/`이고 마이그레이션 경로는 `/migrations`다.
+운영 signing key와 설정 파일은 UID/GID `65532:65532`가 읽을 수 있도록 마운트한다.
+로컬 Compose는 개발용 signing key를 `/tmp/signing_key.pem`에 생성한다. 이 키는
+컨테이너 재생성 시 유지되지 않으므로 운영에서는 persistent secret/volume을 사용한다.
+
+Dockerfile과 로컬 Compose의 기반 이미지는 태그와
 digest를 함께 고정하고 Dependabot이 digest 변경을 제안한다.
 
 릴리스 워크플로는 멀티 아키텍처 이미지와 함께 SBOM 및 SLSA provenance를
