@@ -24,10 +24,12 @@ func checkHealth(ctx context.Context, port string) error {
 			return http.ErrUseLastResponse
 		},
 	}
+	// #nosec G704 -- The host/path are fixed; PORT is parsed and range-checked above.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(n)+"/health", nil)
 	if err != nil {
 		return fmt.Errorf("healthcheck: %w", err)
 	}
+	// #nosec G704 -- Only loopback is contacted, and redirects are disabled.
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("healthcheck: %w", err)
