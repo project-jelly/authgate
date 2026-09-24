@@ -1,0 +1,73 @@
+name: Image Security
+
+on:
+  schedule:
+    # 03:17 Asia/Seoul. A non-round minute reduces shared runner contention.
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: image-security
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  scan:
+    name: Trivy (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read # Pull the repository's image from GHCR.
+      security-events: write # Publish Trivy SARIF results to code scanning.
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+
+    steps:
+      - name: Resolve latest image manifest
+        id: image
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/authgate
+        run: |
+          set -euo pipefail
+          index="$(docker buildx imagetools inspect "${IMAGE}:latest" --raw)"
+          digest="$(
+            jq -er --arg arch "$ARCH" '
+              .manifests[]
+              | select(.platform.os == "linux" and .platform.architecture == $arch)
+              | .digest
+            ' <<<"$index"
+          )"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid ${ARCH} manifest digest: ${digest}" >&2
+            exit 1
+          fi
+          echo "ref=${IMAGE}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "Resolved ${ARCH} image to ${digest}"
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image.outputs.ref }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
+          format: sarif
+          output: trivy-${{ matrix.arch }}.sarif
+          exit-code: "1"
+          timeout: 10m
+
+      - name: Upload results to code scanning
+        if: ${{ always() }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: trivy-${{ matrix.arch }}.sarif
+          category: trivy-image-${{ matrix.arch }}
+          wait-for-processing: true
