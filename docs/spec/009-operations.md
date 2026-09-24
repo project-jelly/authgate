@@ -64,6 +64,7 @@ authgate를 처음 배포할 때 필요한 것:
 
 4. 첫 번째 클라이언트 등록
    → clients.yaml 파일 생성 (아래 "클라이언트 등록" 참조)
+   → Device resource-bound가 필요하면 `allowed_resources` 추가 ([ADR-003](../adr/003-resource-bound-device-tokens.md))
 
 5. 환경변수 설정 → 서버 시작
 ```

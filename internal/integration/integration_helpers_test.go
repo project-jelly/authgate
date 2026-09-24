@@ -57,6 +57,18 @@ func audienceContains(aud any, expected string) bool {
 	return false
 }
 
+func audienceEquals(aud any, expected string) bool {
+	switch v := aud.(type) {
+	case string:
+		return v == expected
+	case []any:
+		return len(v) == 1 && v[0] == expected
+	case []string:
+		return len(v) == 1 && v[0] == expected
+	}
+	return false
+}
+
 // Helper: complete the full browser login flow (authorize → login → callback → token)
 func completeLoginFlow(t *testing.T, ts *TestServer) *TokenResponse {
 	t.Helper()
@@ -176,11 +188,18 @@ type deviceAuthorizeResponse struct {
 }
 
 func startDeviceAuthorization(t *testing.T, ts *TestServer) *deviceAuthorizeResponse {
+	return startDeviceAuthorizationFor(t, ts, "test-client", "")
+}
+
+func startDeviceAuthorizationFor(t *testing.T, ts *TestServer, clientID, resource string) *deviceAuthorizeResponse {
 	t.Helper()
 
 	data := url.Values{
-		"client_id": {"test-client"},
+		"client_id": {clientID},
 		"scope":     {"openid profile email offline_access"},
+	}
+	if resource != "" {
+		data.Set("resource", resource)
 	}
 	resp, err := http.Post(ts.BaseURL+"/oauth/device/authorize", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {
@@ -201,11 +220,18 @@ func startDeviceAuthorization(t *testing.T, ts *TestServer) *deviceAuthorizeResp
 }
 
 func pollDeviceToken(t *testing.T, ts *TestServer, deviceCode string) *TokenResponse {
+	return pollDeviceTokenFor(t, ts, "test-client", deviceCode, "")
+}
+
+func pollDeviceTokenFor(t *testing.T, ts *TestServer, clientID, deviceCode, resource string) *TokenResponse {
 	t.Helper()
 	data := url.Values{
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 		"device_code": {deviceCode},
-		"client_id":   {"test-client"},
+		"client_id":   {clientID},
+	}
+	if resource != "" {
+		data.Set("resource", resource)
 	}
 	resp, err := http.Post(ts.BaseURL+"/oauth/token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {

@@ -181,3 +181,61 @@ func TestResourceBindingPolicy_TokenDelegatesToBase(t *testing.T) {
 		t.Fatalf("base token calls = %d, want 1", base.tokenCalls)
 	}
 }
+
+// Resource-bound device clients must opt into each protected resource via
+// allowed_resources. An mcp-channel client requesting a resource outside the
+// allowlist is rejected at the authorize boundary before the base policy.
+func TestResourceBindingPolicy_RejectsDisallowedResource(t *testing.T) {
+	base := &fakeResourcePolicy{}
+	p := NewResourceBindingPolicy(base, nil)
+
+	client := &storage.ClientModel{LoginChannel: "mcp", AllowedResourceList: storage.StringArray{"https://allowed.example.com"}}
+	err := p.ValidateAuthorizeRequest(context.Background(), client, "https://other.example.com")
+	if err == nil {
+		t.Fatal("expected invalid_target for disallowed resource")
+	}
+	var oidcErr *oidc.Error
+	if !errors.As(err, &oidcErr) || oidcErr.ErrorType != "invalid_target" {
+		t.Fatalf("error = %v, want oidc invalid_target", err)
+	}
+	if base.authCalls != 0 {
+		t.Fatalf("base auth calls = %d, want 0", base.authCalls)
+	}
+}
+
+// An mcp-channel client with an empty allowlist keeps legacy behavior:
+// any single resource is accepted (the channel gate still applies).
+func TestResourceBindingPolicy_AllowsAnyResourceForLegacyClient(t *testing.T) {
+	base := &fakeResourcePolicy{}
+	p := NewResourceBindingPolicy(base, nil)
+
+	client := &storage.ClientModel{LoginChannel: "mcp"}
+	err := p.ValidateAuthorizeRequest(context.Background(), client, "https://legacy.example.com")
+	if err != nil {
+		t.Fatalf("legacy client should pass channel gate: %v", err)
+	}
+	if base.authCalls != 1 {
+		t.Fatalf("base auth calls = %d, want 1", base.authCalls)
+	}
+}
+
+// Stored resource on an mcp client must still be in the allowlist. This closes
+// the legacy-data window where an operator narrows allowed_resources after a
+// grant was issued.
+func TestResourceBindingPolicy_RejectsStoredDisallowedResourceOnMCPClient(t *testing.T) {
+	base := &fakeResourcePolicy{}
+	resolver := fakeClientPolicy{client: &storage.ClientModel{ID: "mcp-app", LoginChannel: "mcp", AllowedResourceList: storage.StringArray{"https://allowed.example.com"}}}
+	p := NewResourceBindingPolicy(base, resolver)
+
+	err := p.ValidateTokenRequest(context.Background(), "mcp-app", "https://other.example.com", "https://other.example.com")
+	if err == nil {
+		t.Fatal("expected invalid_grant for stored disallowed resource on mcp client")
+	}
+	var oidcErr *oidc.Error
+	if !errors.As(err, &oidcErr) || oidcErr.ErrorType != "invalid_grant" {
+		t.Fatalf("error = %v, want oidc invalid_grant", err)
+	}
+	if base.tokenCalls != 0 {
+		t.Fatalf("base token calls = %d, want 0", base.tokenCalls)
+	}
+}

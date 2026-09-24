@@ -97,7 +97,8 @@ func upgradeAccessTokenTyp(ctx context.Context, store *Storage, body []byte) ([]
 	if err := json.Unmarshal(headerJSON, &header); err != nil {
 		return nil, err
 	}
-	if typ, _ := header["typ"].(string); typ == "at+jwt" {
+	resource := ResourceFromContext(ctx)
+	if typ, _ := header["typ"].(string); typ == "at+jwt" && resource == "" {
 		return body, nil
 	}
 
@@ -106,6 +107,10 @@ func upgradeAccessTokenTyp(ctx context.Context, store *Storage, body []byte) ([]
 		return nil, err
 	}
 	payload, err = withScopeClaim(payload, resp)
+	if err != nil {
+		return nil, err
+	}
+	payload, err = withResourceAudience(payload, resource)
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +211,18 @@ func signJWS(sk op.SigningKey, payload []byte, typ string) (string, error) {
 		return "", err
 	}
 	return signed.CompactSerialize()
+}
+
+func withResourceAudience(payload []byte, resource string) ([]byte, error) {
+	if resource == "" {
+		return payload, nil
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, err
+	}
+	claims["aud"] = resource
+	return json.Marshal(claims)
 }
 
 func withScopeClaim(payload []byte, tokenResponse map[string]json.RawMessage) ([]byte, error) {

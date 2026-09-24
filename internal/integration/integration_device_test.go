@@ -137,6 +137,164 @@ func TestIntegration_DeviceFullFlow_TokenIssued(t *testing.T) {
 	}
 }
 
+// device-009 / #357 successor: resource-bound Device grant binds the RFC 8707
+// resource across authorize → poll → refresh. Access token aud is the
+// resource; ID token aud stays client_id.
+func TestIntegration_MCPDeviceFlow_BindsResourceAcrossGrant(t *testing.T) {
+	ts := SetupTestServer(t)
+	ctx := context.Background()
+	resource := ts.BaseURL + "/mcp"
+	clientID := "mcp-device-client"
+
+	user, err := ts.Store.CreateUserWithIdentity(ctx, storage.CreateUserWithIdentityInput{
+		Email: "mcp-device@test.com", EmailVerified: true, Name: "MCP Device",
+		Provider: "google", ProviderUserID: "mcp-device-sub",
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	authz := startDeviceAuthorizationFor(t, ts, clientID, resource)
+	dc, err := ts.Store.GetDeviceCodeByUserCode(ctx, authz.UserCode)
+	if err != nil {
+		t.Fatalf("read device grant: %v", err)
+	}
+	if dc.Resource != resource {
+		t.Fatalf("stored resource = %q, want %q", dc.Resource, resource)
+	}
+	if err := ts.Store.ApproveDeviceCode(ctx, authz.UserCode, user.ID, time.Time{}); err != nil {
+		t.Fatalf("approve device code: %v", err)
+	}
+
+	missing := pollDeviceTokenFor(t, ts, clientID, authz.DeviceCode, "")
+	if missing.StatusCode == http.StatusOK {
+		t.Fatalf("poll without resource should fail, body=%s", missing.RawBody)
+	}
+	dc, err = ts.Store.GetDeviceCodeByUserCode(ctx, authz.UserCode)
+	if err != nil {
+		t.Fatalf("re-read device grant: %v", err)
+	}
+	if dc.State != "approved" {
+		t.Fatalf("failed resource check changed state to %q, want approved", dc.State)
+	}
+
+	result := pollDeviceTokenFor(t, ts, clientID, authz.DeviceCode, resource)
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("resource-bound token exchange failed: status=%d body=%s", result.StatusCode, result.RawBody)
+	}
+	claims := decodeJWTClaims(t, result.AccessToken)
+	if !audienceEquals(claims.Aud, resource) {
+		t.Fatalf("access token aud = %#v, want only resource %q", claims.Aud, resource)
+	}
+	idClaims := decodeJWTClaims(t, result.IDToken)
+	if !audienceEquals(idClaims.Aud, clientID) {
+		t.Fatalf("ID token aud = %#v, want client_id", idClaims.Aud)
+	}
+	assertAtHashBinds(t, result.IDToken, result.AccessToken)
+
+	var storedRefreshResource string
+	if err := ts.DB.QueryRowContext(ctx,
+		`SELECT COALESCE(resource, '') FROM refresh_tokens WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1`,
+		clientID,
+	).Scan(&storedRefreshResource); err != nil {
+		t.Fatalf("read refresh token resource: %v", err)
+	}
+	if storedRefreshResource != resource {
+		t.Fatalf("refresh token resource = %q, want %q", storedRefreshResource, resource)
+	}
+
+	client := NewOAuthClientFor(t, ts.BaseURL, clientID, "/mcp/callback")
+	refreshed := client.RefreshToken(result.RefreshToken)
+	if refreshed.StatusCode != http.StatusOK {
+		t.Fatalf("resource-bound refresh failed: status=%d body=%s", refreshed.StatusCode, refreshed.RawBody)
+	}
+	refreshClaims := decodeJWTClaims(t, refreshed.AccessToken)
+	if !audienceEquals(refreshClaims.Aud, resource) {
+		t.Fatalf("refreshed access token aud = %#v, want only resource %q", refreshClaims.Aud, resource)
+	}
+}
+
+// device-010: channel resource policy is enforced on device authorization:
+// mcp clients require exactly one resource, browser clients reject resource.
+func TestIntegration_DeviceAuthorization_EnforcesChannelResourcePolicy(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	cases := []struct {
+		name     string
+		clientID string
+		resource []string
+	}{
+		{name: "mcp requires resource", clientID: "mcp-client"},
+		{name: "browser rejects resource", clientID: "test-client", resource: []string{ts.BaseURL + "/mcp"}},
+		{name: "duplicate resource rejected", clientID: "mcp-client", resource: []string{ts.BaseURL + "/mcp", ts.BaseURL + "/other"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := url.Values{
+				"client_id": {tc.clientID},
+				"scope":     {"openid offline_access"},
+				"resource":  tc.resource,
+			}
+			resp, err := http.Post(ts.BaseURL+"/oauth/device/authorize", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+			if err != nil {
+				t.Fatalf("device authorize: %v", err)
+			}
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status=%d, want 400 body=%s", resp.StatusCode, string(body))
+			}
+			if !strings.Contains(string(body), "invalid_target") {
+				t.Fatalf("expected invalid_target, body=%s", string(body))
+			}
+		})
+	}
+}
+
+// device-011: resource-bound device clients reject requests for resources
+// outside their explicit allowed_resources allowlist.
+func TestIntegration_MCPDeviceAuthorization_ResourceAllowlist(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	cases := []struct {
+		name     string
+		resource string
+		wantOK   bool
+	}{
+		{name: "allowed resource", resource: ts.BaseURL + "/mcp", wantOK: true},
+		{name: "disallowed resource", resource: ts.BaseURL + "/other", wantOK: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := url.Values{
+				"client_id": {"mcp-device-client"},
+				"scope":     {"openid offline_access"},
+				"resource":  {tc.resource},
+			}
+			resp, err := http.Post(ts.BaseURL+"/oauth/device/authorize", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+			if err != nil {
+				t.Fatalf("device authorize: %v", err)
+			}
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			if tc.wantOK {
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("status=%d, want 200 body=%s", resp.StatusCode, string(body))
+				}
+				return
+			}
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status=%d, want 400 body=%s", resp.StatusCode, string(body))
+			}
+			if !strings.Contains(string(body), "invalid_target") {
+				t.Fatalf("expected invalid_target, body=%s", string(body))
+			}
+		})
+	}
+}
+
 // device-007: concurrent polling should succeed exactly once after approval.
 func TestIntegration_DeviceConcurrentPolling_ExactlyOneSuccess(t *testing.T) {
 	ts := SetupTestServer(t)

@@ -132,15 +132,18 @@ func (r *RefreshTokenModel) SetCurrentScopes(scopes []string) {
 // --- Client Model ---
 
 type ClientModel struct {
-	UUID                 string
-	ID                   string
-	SecretHash           *string
-	Type                 string
-	LoginChannel         string
-	Name                 string
-	URL                  string
-	RedirectURIList      StringArray
-	AllowedScopeList     StringArray
+	UUID             string
+	ID               string
+	SecretHash       *string
+	Type             string
+	LoginChannel     string
+	Name             string
+	URL              string
+	RedirectURIList  StringArray
+	AllowedScopeList StringArray
+	// AllowedResourceList is the explicit opt-in allowlist for RFC 8707
+	// protected resource indicators. Empty means no restriction.
+	AllowedResourceList  StringArray
 	AllowedGrantTypeList StringArray
 	// SkipPKCE waives the PKCE S256 requirement. Zero value keeps it
 	// mandatory so every construction path defaults to the safe behavior.
@@ -206,6 +209,21 @@ func (c *ClientModel) IsScopeAllowed(scope string) bool {
 func (c *ClientModel) IDTokenUserinfoClaimsAssertion() bool {
 	return c.IDTokenUserinfoAssertion
 }
+
+// IsResourceAllowed reports whether the client has explicitly opted into the
+// given protected resource. Empty allowlist means the client is not
+// resource-restricted (backward-compatible behavior for legacy clients).
+func (c *ClientModel) IsResourceAllowed(resource string) bool {
+	if c == nil || len(c.AllowedResourceList) == 0 {
+		return true
+	}
+	for _, r := range c.AllowedResourceList {
+		if r == resource {
+			return true
+		}
+	}
+	return false
+}
 func (c *ClientModel) ClockSkew() time.Duration { return 0 }
 
 // --- DeviceCode Model ---
@@ -215,11 +233,15 @@ type DeviceCodeModel struct {
 	DeviceCode string
 	UserCode   string
 	ClientID   string
-	Scopes     StringArray
-	State      string
-	Subject    *string
-	ExpiresAt  time.Time
-	AuthTime   *time.Time
+	// Resource is the RFC 8707 protected resource bound to this grant.
+	// Empty for regular browser-channel Device grants; required for
+	// resource-bound (mcp-channel) Device grants.
+	Resource  string
+	Scopes    StringArray
+	State     string
+	Subject   *string
+	ExpiresAt time.Time
+	AuthTime  *time.Time
 	// LastPolledAt is the timestamp of the last token-endpoint poll for
 	// this device_code, used by GetDeviceAuthorizatonState to enforce
 	// the RFC 8628 §3.5 `slow_down` cadence. NULL until the first poll.

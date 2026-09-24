@@ -253,22 +253,23 @@ BEFORE UPDATE OR DELETE trigger: core event facts append-only, user_id/ip_addres
 
 `auth_requests.resource`는 MCP authorization에서 사용하는 protected resource 식별자다.
 
-`device_codes.resource`는 migration 016으로 추가됐지만 MCP Device resource 바인딩을
-되돌린 v0.10.1부터 사용하지 않는 nullable 예약 컬럼이다. 이미 운영 DB에 적용된
+`device_codes.resource`는 migration 016으로 추가됐다. v0.10.1에서는 사용하지 않았으나
+ADR-003 이후 resource-bound Device token을 지원한다. 이미 운영 DB에 적용된
 migration 이력을 보존하기 위해 컬럼과 migration 번호를 삭제하거나 재사용하지 않는다.
 
 ```text
-Browser / Device
+Browser / Device (resource-bound 아님)
   -> NULL
 
-MCP
+MCP authorization_code / Device resource-bound
   -> canonical resource URI 저장
 ```
 
 규칙:
-1. `/authorize` 요청의 `resource`를 `auth_requests.resource`에 저장
+1. `/authorize` 또는 `/oauth/device/authorize` 요청의 `resource`를 해당 임시 상태(`auth_requests` 또는 `device_codes`)에 저장
 2. `/oauth/token` 요청의 `resource`와 일치해야 한다
-3. 성공적인 code exchange가 끝나면 auth_request와 함께 정리된다
+3. Device grant의 resource는 `/oauth/device/authorize` 시점에 허용된 값으로 고정되며 승인 후 변경할 수 없다
+4. 성공적인 code exchange/device token 발급이 끝나면 임시 상태는 정리된다
 
 ## 보안 규칙
 

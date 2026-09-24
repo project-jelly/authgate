@@ -382,6 +382,130 @@ clients:
 	}
 }
 
+// Device-only clients (device_code grant without authorization_code) do not
+// need redirect_uris. This keeps CLI-only registrations minimal.
+func TestLoadClientConfig_DeviceOnlyClientAllowsNoRedirectURI(t *testing.T) {
+	path := writeClientConfigFile(t, `
+clients:
+  - client_id: notegate-cli
+    client_type: public
+    login_channel: mcp
+    name: NoteGate CLI
+    allowed_scopes: [openid, offline_access]
+    allowed_grant_types: ["urn:ietf:params:oauth:grant-type:device_code", refresh_token]
+`)
+
+	cfg, err := LoadClientConfig(path)
+	if err != nil {
+		t.Fatalf("device-only client should not require redirect_uri: %v", err)
+	}
+	if got := len(cfg.Clients[0].RedirectURIs); got != 0 {
+		t.Fatalf("redirect URI count = %d, want 0", got)
+	}
+}
+
+func TestLoadClientConfig_AuthorizationCodeStillRequiresRedirectURI(t *testing.T) {
+	path := writeClientConfigFile(t, `
+clients:
+  - client_id: browser-client
+    client_type: public
+    login_channel: browser
+    name: Browser Client
+    allowed_scopes: [openid]
+    allowed_grant_types: [authorization_code]
+`)
+
+	_, err := LoadClientConfig(path)
+	if err == nil || !strings.Contains(err.Error(), "authorization_code grant requires") {
+		t.Fatalf("expected authorization_code redirect_uri error, got: %v", err)
+	}
+}
+
+// Device-only resource-bound clients require allowed_resources and the device_code
+// grant, and must not include the authorization_code grant.
+func TestLoadClientConfig_ResourceBoundDeviceClientValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		config  string
+		wantErr string
+	}{
+		{
+			name: "valid resource-bound device client",
+			config: `
+clients:
+  - client_id: mcp-device
+    client_type: public
+    login_channel: mcp
+    name: MCP Device
+    allowed_scopes: [openid, offline_access]
+    allowed_grant_types: ["urn:ietf:params:oauth:grant-type:device_code", refresh_token]
+    allowed_resources: ["https://api.example.com/mcp"]
+`,
+			wantErr: "",
+		},
+		{
+			name: "resource-bound browser client rejected",
+			config: `
+clients:
+  - client_id: browser-device
+    client_type: public
+    login_channel: browser
+    name: Browser Device
+    allowed_scopes: [openid]
+    allowed_grant_types: ["urn:ietf:params:oauth:grant-type:device_code"]
+    allowed_resources: ["https://api.example.com/mcp"]
+`,
+			wantErr: "allowed_resources is not permitted for browser-channel clients",
+		},
+		{
+			name: "resource-bound without device_code grant rejected",
+			config: `
+clients:
+  - client_id: mcp-auth-code
+    client_type: public
+    login_channel: mcp
+    name: MCP Auth Code
+    redirect_uris: ["https://api.example.com/callback"]
+    allowed_scopes: [openid]
+    allowed_grant_types: [authorization_code, refresh_token]
+    allowed_resources: ["https://api.example.com/mcp"]
+`,
+			wantErr: "allowed_resources requires the device_code grant",
+		},
+		{
+			name: "resource-bound with authorization_code rejected",
+			config: `
+clients:
+  - client_id: mcp-mixed
+    client_type: public
+    login_channel: mcp
+    name: MCP Mixed
+    redirect_uris: ["https://api.example.com/callback"]
+    allowed_scopes: [openid, offline_access]
+    allowed_grant_types: [authorization_code, "urn:ietf:params:oauth:grant-type:device_code"]
+    allowed_resources: ["https://api.example.com/mcp"]
+`,
+			wantErr: "resource-bound device client must not include authorization_code",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeClientConfigFile(t, tc.config)
+			_, err := LoadClientConfig(path)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected success, got: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got: %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
 // skip_pkce must not reach the MCP channel. PKCE S256 is part of the MCP
 // contract (spec 004), and the client_type guard alone does not cover it: a
 // confidential client on login_channel: mcp would otherwise load fine and

@@ -15,6 +15,13 @@ v0.10.1은 v0.10.0의 MCP Device resource 바인딩을 되돌리지만 이미 �
 `016_device_codes_resource` migration과 nullable 컬럼은 삭제하지 않는다. 기존 DB와
 신규 설치의 migration 이력을 일치시키기 위한 것이며, 해당 컬럼과 번호를 재사용하지 않는다.
 
+ADR-003 이후 `device_codes.resource`는 resource-bound Device token을 지원하는 데
+다시 사용된다. migration 변경 없이 기존 nullable 컬럼을 활성화하므로, 이전 버전과
+신규 버전 사이의 롤링 배포에서도 DB 스키마 충돌은 없다. 다만, resource-bound Device
+client를 등록한 후에는 이전 버전 바이너리가 그 행의 `resource` 값을 무시하므로
+`aud=client_id` 토큰을 발급할 수 있다. 이는 클라이언트별 opt-in이므로 operator가
+resource-bound 정책을 필요로 하는 버전으로만 배포하면 된다.
+
 ## PII 암호화 → 평문 제거 (2단계, 순서 필수)
 
 PII 평문(email / name / provider_user_id)을 암호화 컬럼으로 옮기는 작업은 **두 릴리즈에 걸쳐**

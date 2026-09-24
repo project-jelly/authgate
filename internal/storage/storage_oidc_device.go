@@ -110,11 +110,13 @@ func (s *Storage) Health(ctx context.Context) error {
 // --- DeviceAuthorizationStorage ---
 
 func (s *Storage) StoreDeviceAuthorization(ctx context.Context, clientID, deviceCode, userCode string, expires time.Time, scopes []string) error {
+	resource := ResourceFromContext(ctx)
 	if err := storeq.New(s.db).InsertDeviceCode(ctx, storeq.InsertDeviceCodeParams{
 		ID:         s.idgen.NewUUID(),
 		DeviceCode: s.codeAtRest(deviceCode),
 		UserCode:   s.codeAtRest(userCode),
 		ClientID:   clientID,
+		Resource:   sql.NullString{String: resource, Valid: resource != ""},
 		Scopes:     scopes,
 		ExpiresAt:  expires,
 		CreatedAt:  s.clock.Now(),
@@ -140,6 +142,14 @@ func (s *Storage) GetDeviceAuthorizatonState(ctx context.Context, clientID, devi
 
 	dc, err := loadDeviceAuthorizationForUpdate(ctx, qtx, clientID, s.codeAtRest(deviceCode))
 	if err != nil {
+		return nil, err
+	}
+
+	// Validate the bound resource before any state transition. A mismatch or
+	// missing resource must not consume the device code, so this check stays
+	// before the approved->consumed transition below.
+	requestResource := ResourceFromContext(ctx)
+	if err := s.resourcePolicy.ValidateTokenRequest(ctx, dc.ClientID, dc.Resource, requestResource); err != nil {
 		return nil, err
 	}
 
@@ -230,6 +240,7 @@ func (s *Storage) GetDeviceCodeByUserCode(ctx context.Context, userCode string) 
 		DeviceCode: "",
 		UserCode:   userCode,
 		ClientID:   row.ClientID,
+		Resource:   row.Resource,
 		Scopes:     StringArray(row.Scopes),
 		State:      row.State,
 		Subject:    nullStringToPtr(row.Subject),
@@ -282,6 +293,7 @@ func loadDeviceAuthorizationForUpdate(ctx context.Context, qtx *storeq.Queries, 
 	return &DeviceCodeModel{
 		ID:           row.ID,
 		ClientID:     row.ClientID,
+		Resource:     row.Resource,
 		Scopes:       StringArray(row.Scopes),
 		State:        row.State,
 		Subject:      nullStringToPtr(row.Subject),
