@@ -18,6 +18,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
+      artifact-metadata: write # Persist the attested image's artifact metadata record.
       attestations: write # Sign and publish provenance for the image digest.
       contents: write # Create the version tag and GitHub release.
       id-token: write # Exchange GitHub OIDC identity for the attestation.
