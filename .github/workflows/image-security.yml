@@ -63,6 +63,7 @@ jobs:
           output: trivy-${{ matrix.arch }}.sarif
           exit-code: "1"
           timeout: 10m
+          cache: false
 
       - name: Upload results to code scanning
         if: ${{ always() }}
