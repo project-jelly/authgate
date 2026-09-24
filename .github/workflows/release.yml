@@ -1,11 +1,11 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - VERSION
-      - .github/workflows/release.yml
 
 concurrency:
   group: release-${{ github.ref }}
