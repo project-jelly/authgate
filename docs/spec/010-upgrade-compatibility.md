@@ -9,6 +9,18 @@
 마이그레이션 자체는 authgate 시작 시 자동 적용된다 ([009 운영](009-operations.md) 참조).
 이 문서는 "어떤 순서로, 어떤 주의로 버전을 올리는가"를 다룬다.
 
+## Distroless 실행 이미지 전환
+
+실행 이미지가 Alpine에서 Distroless static Debian 13으로 바뀐다.
+비특권 사용자 UID/GID는 `65532:65532`다. 기존 사용자 소유로 제한된 signing key,
+설정 및 brand 파일은 새 사용자도 읽을 수 있는지 확인한다. 작업 디렉터리 `/`와
+마이그레이션 경로 `/migrations`, HTTP 엔드포인트 및 DB 스키마는 유지한다.
+
+컨테이너 내부의 `sh`, `wget`, `apk`에 의존한 커스텀 healthcheck나 운영 스크립트는
+사용할 수 없다. Docker/Compose는 `/authgate healthcheck`를 exec 형식으로 실행하고,
+Kubernetes는 기존 HTTP probe를 사용한다. 기본 이미지에 디버깅 도구를 추가하지 않고
+필요 시 별도 디버그 컨테이너로 조사한다.
+
 ## Migration 016 유지
 
 v0.10.1은 v0.10.0의 MCP Device resource 바인딩을 되돌리지만 이미 적용된

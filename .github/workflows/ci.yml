@@ -98,13 +98,58 @@ jobs:
         # and runs in ~2-3min locally, but the shared ARC runner under load can
         # exceed Go's default 10m per-package timeout and panic. 20m gives wide
         # headroom without masking a genuine hang.
-        run: go test -coverprofile=coverage.out -tags=integration -timeout 20m ./internal/...
+        run: go test -coverprofile=coverage.out -tags=integration -timeout 20m ./...
 
       - name: Upload coverage
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: code-coverage
           path: coverage.out
+
+  image-smoke:
+    name: Image Smoke (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Build and start the runtime image
+        run: docker compose up --build --wait --wait-timeout 120 authgate
+      - name: Check runtime files, health and database readiness
+        run: |
+          container_id="$(docker compose ps -q authgate)"
+          test "$(docker inspect --format '{{.Config.User}}' "$container_id")" = '65532:65532'
+          docker compose exec -T authgate /authgate healthcheck
+          if docker compose exec -T -e PORT=1 authgate /authgate healthcheck; then
+            echo "Healthcheck unexpectedly passed with no listener" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error http://localhost:8080/ready | jq -e '.status == "ready"'
+          curl --fail --silent --show-error http://localhost:8080/.well-known/openid-configuration | jq -e '.issuer == "http://localhost:8080"'
+          curl --fail --silent --show-error http://localhost:8080/keys | jq -e '.keys | length > 0'
+          docker cp "$container_id:/etc/ssl/certs/ca-certificates.crt" "$RUNNER_TEMP/authgate-ca.crt"
+          test -s "$RUNNER_TEMP/authgate-ca.crt"
+          # Inspect from the host: the runtime intentionally has no shell.
+          docker export "$container_id" | tar -tf - > "$RUNNER_TEMP/authgate-files.txt"
+          if grep -Eq '^(usr/)?(s?bin)/(sh|bash|ash|busybox|apk|wget)$' "$RUNNER_TEMP/authgate-files.txt"; then
+            echo "Unexpected shell or utility in the runtime image" >&2
+            exit 1
+          fi
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v
 
   race:
     name: Race

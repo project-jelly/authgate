@@ -46,6 +46,12 @@
 실패한 job의 로그를 확인한 뒤 수정 커밋으로 다시 검증한다.
 명시적인 로컬 재현 요청이 없으면 CI용 검사를 로컬에서 반복하거나 도구를 설치하지 않는다.
 
+`cmd/authgate/healthcheck_test.go`는 healthcheck 명령의 HTTP 200 성공,
+오류 응답·리디렉션·잘못된 포트·연결 실패·취소 처리를 검증한다.
+CI의 `Image Smoke`는 amd64와 arm64에서 실제 Docker 이미지를 빌드하고 Compose의
+PostgreSQL·mock IdP와 함께 기동한다. 비루트 사용자, healthcheck 성공/실패,
+DB readiness, OIDC discovery/JWKS, CA 인증서 및 셸 없는 실행 이미지를 확인한다.
+
 `internal/integration/integration_grant_contract_test.go`는 실제 HTTP와
 PostgreSQL 잠금으로 인증 코드 동시 소비(최대 1회), 잘못된 요청 뒤 정상
 재시도, refresh INSERT 실패 시 code 소비 rollback을 검증한다.
