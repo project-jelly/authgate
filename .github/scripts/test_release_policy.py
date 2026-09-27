@@ -86,9 +86,12 @@ class ReleasePolicy(unittest.TestCase):
 
     def test_existing_version_requires_signed_source(self):
         repository = "https://github.com/project-jelly/authgate"
-        statement = {"predicateType": "https://slsa.dev/provenance/v1", "predicate": {
-            "buildDefinition": {"externalParameters": {"source": {"repository": repository, "commit": SHA}},
-                                "resolvedDependencies": [{"uri": f"git+{repository}@{SHA}", "digest": {"gitCommit": SHA}}]}}}
+        statement = {"predicateType": policy.PREDICATE_TYPE, "predicate": {
+            "source": {"repository": repository, "commit": SHA},
+            "ci": {"runId": "123", "runAttempt": "1"},
+            "workflow": {"ref": "project-jelly/authgate/.github/workflows/release.yml@refs/heads/main", "commit": SHA},
+            "invocation": {"id": repository + "/actions/runs/456/attempts/1", "event": "workflow_run", "runnerEnvironment": "github-hosted"}}}
+
         policy.verify_existing([{"verificationResult": {"statement": statement}}], repository, SHA)
         statement["predicate_type"] = statement.pop("predicateType")
         policy.verify_existing([{"verificationResult": {"statement": statement}}], repository, SHA)
@@ -99,6 +102,14 @@ class ReleasePolicy(unittest.TestCase):
         for results, revision in [([statement], SHA), ([{"verificationResult": {"statement": statement}}], "c" * 40)]:
             with self.assertRaises(ValueError):
                 policy.verify_existing(results, repository, revision)
+
+
+    def test_existing_evidence_requires_ci_and_workflow_context(self):
+        repository = "https://github.com/project-jelly/authgate"
+        statement = {"predicate_type": policy.PREDICATE_TYPE, "predicate": {
+            "source": {"repository": repository, "commit": SHA}}}
+        with self.assertRaises(ValueError):
+            policy.verify_existing([{"verificationResult": {"statement": statement}}], repository, SHA)
 
 
 
