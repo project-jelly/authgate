@@ -68,6 +68,16 @@ class ReleasePolicy(unittest.TestCase):
                 policy.subprocess, "check_output", return_value='{"digest":"wrong"}'), self.assertRaises(ValueError):
             policy.promote("image", DIGEST, "v1.2.3")
 
+    def test_registry_absence_is_narrow_and_errors_fail_closed(self):
+        image = "ghcr.io/project-jelly/authgate"
+        result = policy.subprocess.CompletedProcess([], 1, "", f"ERROR: {image}:v1.2.3: not found\n")
+        with patch.object(policy.subprocess, "run", return_value=result):
+            self.assertIsNone(policy.existing_digest(image, "v1.2.3"))
+        for error in ["credential helper not found", "host not found", "unauthorized", "timeout", "manifest unknown from another image"]:
+            result.stderr = error
+            with self.subTest(error=error), patch.object(policy.subprocess, "run", return_value=result), self.assertRaises(ValueError):
+                policy.existing_digest(image, "v1.2.3")
+
     def test_existing_version_digest_is_immutable(self):
         with patch.object(policy, "existing_digest", return_value="sha256:" + "c" * 64), patch.object(
                 policy.subprocess, "run") as run, self.assertRaises(ValueError):

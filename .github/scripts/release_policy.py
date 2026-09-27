@@ -62,7 +62,7 @@ def existing_digest(image, version):
          "--format", "{{json .Manifest}}"], capture_output=True, text=True)
     if result.returncode:
         message = result.stderr.lower()
-        if "manifest unknown" in message or f"{image}:{version} not found" in message:
+        if re.search(r"(?m)^error: " + re.escape(f"{image}:{version}") + r": (?:not found|manifest unknown)$", message.strip()):
             return None
         raise ValueError(f"Cannot resolve existing release image: {result.stderr}")
     digest = json.loads(result.stdout)["digest"]
