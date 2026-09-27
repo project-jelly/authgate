@@ -90,6 +90,12 @@ class ReleasePolicy(unittest.TestCase):
             "buildDefinition": {"externalParameters": {"source": {"repository": repository, "commit": SHA}},
                                 "resolvedDependencies": [{"uri": f"git+{repository}@{SHA}", "digest": {"gitCommit": SHA}}]}}}
         policy.verify_existing([{"verificationResult": {"statement": statement}}], repository, SHA)
+        statement["predicate_type"] = statement.pop("predicateType")
+        policy.verify_existing([{"verificationResult": {"statement": statement}}], repository, SHA)
+        statement["predicateType"] = "conflict"
+        with self.assertRaises(ValueError):
+            policy.verify_existing([{"verificationResult": {"statement": statement}}], repository, SHA)
+        del statement["predicateType"]
         for results, revision in [([statement], SHA), ([{"verificationResult": {"statement": statement}}], "c" * 40)]:
             with self.assertRaises(ValueError):
                 policy.verify_existing(results, repository, revision)
