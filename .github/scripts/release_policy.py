@@ -7,6 +7,8 @@ import sys
 import urllib.error
 import urllib.request
 
+from release_provenance import statement_predicate_type
+
 
 def api(path):
     request = urllib.request.Request(
@@ -77,7 +79,7 @@ def verify_existing(results, repository, revision):
         definition = statement.get("predicate", {}).get("buildDefinition", {})
         source = definition.get("externalParameters", {}).get("source", {})
         dependencies = definition.get("resolvedDependencies", [])
-        if (statement.get("predicateType") == "https://slsa.dev/provenance/v1"
+        if (statement_predicate_type(statement) == "https://slsa.dev/provenance/v1"
                 and source == {"repository": repository, "commit": revision}
                 and {"uri": f"git+{repository}@{revision}", "digest": {"gitCommit": revision}} in dependencies):
             return
