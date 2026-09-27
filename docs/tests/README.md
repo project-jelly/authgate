@@ -65,6 +65,12 @@ PostgreSQL 잠금으로 인증 코드 동시 소비(최대 1회), 잘못된 요�
 - integration 테스트는 testcontainers-go를 사용하므로 Docker 접근 권한이 필요
 ```
 
+`.github/scripts/test_release_policy.py`는 CI 출처·결과·커밋 검증, 안정 버전 형식,
+미발행/완료/부분 실패 릴리스 처리, immutable digest 승격과 Trivy 보고서의
+취약점·secret 실패 조건을 검증한다. `test_release_provenance.py`는 소스 SHA와
+워크플로 SHA의 분리, 서명 검증된 predicate의 소스·CI·빌드 실행 일치를 검증한다.
+`Release Policy` CI에서 실행한다.
+
 ## 테스트 원칙
 
 구조 리팩토링의 HTTP/서비스 계약 회귀 테스트:

@@ -1,0 +1,78 @@
+name: Scan immutable image
+description: Scan one platform and retain the immutable target and reports.
+inputs:
+  image:
+    description: Image reference or multi-platform index digest
+    required: true
+  arch:
+    description: Linux architecture
+    required: true
+  category:
+    description: Distinct SARIF and artifact category
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve immutable target
+      id: target
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        ARCH: ${{ inputs.arch }}
+        CATEGORY: ${{ inputs.category }}
+      run: |
+        set -euo pipefail
+        mkdir -p "reports/${CATEGORY}"
+        index_digest="$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | jq -er .digest)"
+        [[ "$index_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        repository="${IMAGE%@*}"
+        repository="${repository%:*}"
+        index="$(docker buildx imagetools inspect "${repository}@${index_digest}" --raw)"
+        digest="$(jq -er --arg arch "$ARCH" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else error("Expected one platform manifest") end' <<<"$index")"
+        [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        printf '%s\n' "index=${repository}@${index_digest}" "platform=linux/${ARCH}" "target=${repository}@${digest}" > "reports/${CATEGORY}/target.txt"
+        echo "ref=${repository}@${digest}" >> "$GITHUB_OUTPUT"
+    - name: Scan vulnerabilities and secrets
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        version: v0.74.0
+        scan-type: image
+        image-ref: ${{ steps.target.outputs.ref }}
+        scanners: vuln,secret
+        severity: HIGH,CRITICAL
+        ignore-unfixed: false
+        format: json
+        output: reports/${{ inputs.category }}/trivy.json
+        exit-code: '0'
+        timeout: 10m
+        cache: false
+    - name: Convert the same scan to SARIF and text
+      if: ${{ always() && steps.target.outcome == 'success' }}
+      shell: bash
+      env:
+        CATEGORY: ${{ inputs.category }}
+      run: |
+        set -euo pipefail
+        trivy convert --format sarif --output "reports/${CATEGORY}/trivy.sarif" "reports/${CATEGORY}/trivy.json"
+        trivy convert --format table --output "reports/${CATEGORY}/trivy.txt" "reports/${CATEGORY}/trivy.json"
+    - name: Enforce findings policy
+      if: ${{ always() && steps.target.outcome == 'success' }}
+      shell: bash
+      env:
+        CATEGORY: ${{ inputs.category }}
+      run: python3 .github/scripts/check_scan.py "reports/${CATEGORY}/trivy.json"
+    - name: Upload SARIF
+      if: ${{ always() && steps.target.outcome == 'success' }}
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+      with:
+        sarif_file: reports/${{ inputs.category }}/trivy.sarif
+        category: ${{ inputs.category }}
+        wait-for-processing: true
+    - name: Retain reports and immutable target
+      if: ${{ always() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: ${{ inputs.category }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: reports/${{ inputs.category }}/
+        retention-days: 30
+        if-no-files-found: error

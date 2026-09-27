@@ -77,12 +77,14 @@ git push -u origin release/vX.Y.Z
 
 ### 머지 후 자동 실행 (release.yml)
 
-1. `vX.Y.Z` git 태그 생성
-2. GitHub Release 생성 (릴리즈 노트 자동)
-3. GHCR 이미지 빌드 + 푸시
-   - `ghcr.io/project-jelly/authgate:vX.Y.Z`
-   - `ghcr.io/project-jelly/authgate:latest`
-4. 오래된 이미지 자동 정리 (최신 20개 유지)
+1. 성공한 main push CI의 정확한 SHA와 미발행 `VERSION` 확인
+2. 멀티 아키텍처 후보 이미지 1회 빌드 (SBOM/provenance 포함)
+3. amd64/arm64 digest를 Trivy로 검사하고 attestation 검증
+4. 검사한 index digest를 `vX.Y.Z` / `latest`로 승격한 뒤 git 태그와 GitHub Release 생성
+
+수동 릴리스 우회는 없다. 재시도는 성공한 CI에 연결된 Release 실행을 다시 실행한다.
+이미 발행된 버전은 건너뛴다. 이미지의 하위 manifest와 attestation 보존을 위해
+GHCR 자동 삭제는 수행하지 않는다. 세부 정책은 `docs/spec/009-operations.md`를 참조한다.
 
 ### 버전 규칙
 
