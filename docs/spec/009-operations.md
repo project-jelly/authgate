@@ -480,6 +480,40 @@ GHCR에 게시하고, GitHub OIDC로 이미지 digest에 대한 artifact attesta
 발급한다. 배포 자동화는 가변 `latest` 태그 대신 릴리스 digest를 사용하고
 attestation을 검증한 뒤 승격해야 한다.
 
+### CI/CD 보안 정책
+
+Dependabot은 매주 월요일 `Asia/Seoul` 기준으로 업데이트를 제안한다.
+기존 7일 cooldown, Dependency Review, govulncheck, CodeQL 설정은 유지한다.
+
+Release는 이 리포의 성공한 main push CI만 받아 정확한 커밋을 빌드한다.
+이미 발행된 `VERSION`은 건너뛰며, 오래된 CI는 건너뛴 뒤 다음 main CI가
+미발행 버전을 확인한다. 검사 도중 main이 바뀌면 승격을 중단한다.
+실패한 실행은 해당 Release 실행에서 재시도하며 별도 수동 발행 경로는 없다.
+이미 버전 이미지가 있으면 서명된 출처의 소스 SHA를 확인하고 같은 digest를
+재검사·재사용한다. 새 빌드로 기존 버전 이미지를 덮어쓰지 않는다.
+태그 생성 후 Release 생성이 실패한 경우에도 같은 커밋·digest로 복구한다.
+기존 이미지의 출처를 검증할 수 없으면 자동 복구를 중단한다.
+
+후보 이미지를 한 번 빌드한 뒤 amd64/arm64 manifest digest를 각각 검사한다.
+두 검사와 출처 증명 검증이 모두 성공해야 동일한 index digest를 버전 태그와
+`latest`로 승격한다. BuildKit `mode=max` provenance와 SBOM을 보존하고,
+GitHub OIDC attestation은 실제 검증된 소스 SHA를 명시한다.
+
+Trivy 엔진은 `v0.74.0`으로 고정하며 `vuln,secret`의 HIGH/CRITICAL 발견을
+수정 버전 유무와 관계없이 실패 처리한다. 스캐너 오류, 잘못되거나 누락된 보고서,
+SARIF 업로드 실패도 숨기지 않는다. JSON/SARIF/TXT와 검사한 immutable target은
+Actions artifact로 30일 보관한다. 일일 검사는 현재 `latest`의 두 아키텍처를
+검사하며 모든 과거 릴리스나 실제 운영 배포 digest를 포괄하지 않는다.
+
+공유되는 untagged platform manifest와 SBOM/attestation을 삭제하지 않도록
+기존 GHCR 자동 정리를 제거했다. 후보 이미지도 자동 삭제하지 않으며,
+참조 관계를 검증하는 별도 보존 정책이 마련되기 전까지 저장소에 남는다.
+
+최소 권한과 Action SHA 고정은 [GitHub Actions 보안 지침](https://docs.github.com/en/actions/reference/security/secure-use),
+검증 가능한 출처는 [SLSA provenance](https://slsa.dev/spec/v1.2/provenance),
+검사·릴리스 기준은 [NIST SSDF](https://csrc.nist.gov/pubs/sp/800/218/final)에 근거한다.
+주간/일일 주기, 30일 보관, 심각도 기준은 팀 운영 정책이며 SLSA 수준 인증을 주장하지 않는다.
+
 ### 유저 정지
 
 ```sql

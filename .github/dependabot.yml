@@ -8,6 +8,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -23,6 +24,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -38,6 +40,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 3
@@ -53,6 +56,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 3
@@ -68,6 +72,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 3
@@ -83,6 +88,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 3
@@ -92,6 +98,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     cooldown:
       default-days: 7
     open-pull-requests-limit: 3

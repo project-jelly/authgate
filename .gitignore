@@ -50,3 +50,5 @@ signing_key.pem
 # Local screenshots / capture artifacts at the repo root.
 # `docs/images/**` images are still tracked for documentation use.
 /*.png
+
+__pycache__/
