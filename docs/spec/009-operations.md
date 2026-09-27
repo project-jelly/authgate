@@ -497,7 +497,10 @@ Release는 이 리포의 성공한 main push CI만 받아 정확한 커밋을 �
 후보 이미지를 한 번 빌드한 뒤 amd64/arm64 manifest digest를 각각 검사한다.
 두 검사와 출처 증명 검증이 모두 성공해야 동일한 index digest를 버전 태그와
 `latest`로 승격한다. BuildKit `mode=max` provenance와 SBOM을 보존하고,
-GitHub OIDC attestation은 실제 검증된 소스 SHA를 명시한다.
+GitHub OIDC custom release-evidence attestation은 검증된 소스 SHA, 성공한 CI 실행,
+워크플로 SHA 및 발행 실행을 명시한다. `workflow_run` 발행에 GitHub의 직접 빌드용
+SLSA workflow build type을 적용하지 않는다. 서명된 custom evidence와 BuildKit의
+SLSA provenance/SBOM은 역할이 다르며, 승격 전에 digest·서명·실제 소스와 실행 정보를 검증한다.
 
 Trivy 엔진은 `v0.74.0`으로 고정하며 `vuln,secret`의 HIGH/CRITICAL 발견을
 수정 버전 유무와 관계없이 실패 처리한다. 스캐너 오류, 잘못되거나 누락된 보고서,

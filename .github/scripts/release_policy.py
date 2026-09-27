@@ -7,7 +7,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from release_provenance import statement_predicate_type
+from release_provenance import PREDICATE_TYPE, statement_predicate_type
 
 
 def api(path):
@@ -76,12 +76,20 @@ def existing_digest(image, version):
 def verify_existing(results, repository, revision):
     for result in results:
         statement = result.get("verificationResult", {}).get("statement", {})
-        definition = statement.get("predicate", {}).get("buildDefinition", {})
-        source = definition.get("externalParameters", {}).get("source", {})
-        dependencies = definition.get("resolvedDependencies", [])
-        if (statement_predicate_type(statement) == "https://slsa.dev/provenance/v1"
+        evidence = statement.get("predicate", {})
+        source = evidence.get("source", {})
+        ci = evidence.get("ci", {})
+        invocation = evidence.get("invocation", {})
+        workflow = evidence.get("workflow", {})
+        expected_workflow = repository.removeprefix("https://github.com/") + "/.github/workflows/release.yml@refs/heads/main"
+        if (statement_predicate_type(statement) == PREDICATE_TYPE
                 and source == {"repository": repository, "commit": revision}
-                and {"uri": f"git+{repository}@{revision}", "digest": {"gitCommit": revision}} in dependencies):
+                and all(re.fullmatch(r"[1-9][0-9]*", str(ci.get(key, ""))) for key in ("runId", "runAttempt"))
+                and workflow.get("ref") == expected_workflow
+                and re.fullmatch(r"[a-f0-9]{40}", workflow.get("commit", ""))
+                and invocation.get("event") == "workflow_run"
+                and invocation.get("runnerEnvironment") == "github-hosted"
+                and re.fullmatch(re.escape(repository) + r"/actions/runs/[1-9][0-9]*/attempts/[1-9][0-9]*", invocation.get("id", ""))):
             return
     raise ValueError("Existing version image has no verified provenance for this source")
 

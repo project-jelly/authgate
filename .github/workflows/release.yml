@@ -72,7 +72,7 @@ jobs:
         run: |
           gh attestation verify "oci://${IMAGE}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
-            --predicate-type https://slsa.dev/provenance/v1 \
+            --predicate-type https://project-jelly.github.io/attestations/release-evidence/v1 \
             --deny-self-hosted-runners --format json > "$RUNNER_TEMP/existing-provenance.json"
           python3 .github/scripts/release_policy.py verify-existing "$RUNNER_TEMP/existing-provenance.json"
       - name: Build candidate once
@@ -148,15 +148,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Record source and workflow revisions
         run: python3 .github/scripts/release_provenance.py generate "$RUNNER_TEMP/provenance.json"
-      - name: Attest scanned image provenance
+      - name: Attest scanned image release evidence
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/authgate
           subject-digest: ${{ needs.build.outputs.digest }}
           push-to-registry: true
-          predicate-type: https://slsa.dev/provenance/v1
+          predicate-type: https://project-jelly.github.io/attestations/release-evidence/v1
           predicate-path: ${{ runner.temp }}/provenance.json
-      - name: Verify attestation for the exact scanned index
+      - name: Verify release evidence for the exact scanned index
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ghcr.io/${{ github.repository_owner }}/authgate
@@ -165,7 +165,7 @@ jobs:
         run: |
           gh attestation verify "oci://${IMAGE}@${DIGEST}" --repo "$REPOSITORY" \
             --signer-workflow "$REPOSITORY/.github/workflows/release.yml" \
-            --predicate-type https://slsa.dev/provenance/v1 \
+            --predicate-type https://project-jelly.github.io/attestations/release-evidence/v1 \
             --deny-self-hosted-runners --format json > "$RUNNER_TEMP/verified-provenance.json"
           python3 .github/scripts/release_provenance.py verify "$RUNNER_TEMP/verified-provenance.json"
       - name: Promote scanned digest without rebuilding

@@ -69,7 +69,8 @@ PostgreSQL 잠금으로 인증 코드 동시 소비(최대 1회), 잘못된 요�
 미발행/완료/부분 실패 릴리스 처리, immutable digest 승격과 Trivy 보고서의
 취약점·secret 실패 조건을 검증한다. `test_release_provenance.py`는 소스 SHA와
 워크플로 SHA의 분리, 서명 검증된 predicate의 소스·CI·빌드 실행 일치를 검증한다.
-실제 `gh attestation verify` 출력 구조를 익명화한 fixture로 `predicate_type`을
+custom release-evidence의 이벤트·호스팅 runner 조건과 SLSA build type 미주장도 검사한다.
+실제 `gh attestation verify` 출력 구조에 합성 custom evidence를 넣은 fixture로 `predicate_type`을
 검증하고, `predicateType` 호환 및 두 필드의 충돌 거부도 확인한다.
 `Release Policy` CI에서 실행한다.
 
