@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ type fakeIdP struct {
 	userinfoStatus int            // non-zero overrides userinfo endpoint HTTP status
 	nonce          string         // echoed into the id_token's nonce claim (set by the test from the authorize request)
 	idTokenExtra   map[string]any // extra claims signed into the id_token
+	tokenRequests  atomic.Int32
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -87,6 +89,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	})
 
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		idp.tokenRequests.Add(1)
 		if idp.tokenStatus != 0 {
 			http.Error(w, "token error", idp.tokenStatus)
 			return
@@ -528,6 +531,9 @@ func TestOIDCProvider_NonceMismatch_Rejected(t *testing.T) {
 	p.Callback(cbRec, cbReq, func(http.ResponseWriter, *http.Request, string, *UserInfo) { called = true })
 	if called {
 		t.Error("onSuccess invoked despite id_token nonce mismatch — replay/injection not rejected")
+	}
+	if cbRec.Code != http.StatusUnauthorized || idp.tokenRequests.Load() != 1 {
+		t.Fatalf("status = %d, token requests = %d, want 401 after one exchange to verify the returned nonce", cbRec.Code, idp.tokenRequests.Load())
 	}
 }
 

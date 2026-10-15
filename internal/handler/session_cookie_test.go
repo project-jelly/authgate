@@ -21,7 +21,7 @@ func TestSetSessionCookie_IsLaxSoTheIdPRedirectSurvives(t *testing.T) {
 	rec := httptest.NewRecorder()
 	setSessionCookie(rec, "session-value", false)
 
-	c := findCookie(t, rec.Result().Cookies(), sessionCookieName)
+	c := findCookie(t, rec.Result().Cookies(), sessionCookieName(false))
 
 	if c.SameSite != http.SameSiteLaxMode {
 		t.Errorf("SameSite = %v, want Lax: Strict is dropped on the hop back from the IdP", c.SameSite)
@@ -31,6 +31,9 @@ func TestSetSessionCookie_IsLaxSoTheIdPRedirectSurvives(t *testing.T) {
 	}
 	if !c.Secure {
 		t.Error("Secure = false, want true outside dev mode")
+	}
+	if c.Domain != "" {
+		t.Errorf("Domain = %q, want host-only", c.Domain)
 	}
 	if c.Path != "/" {
 		t.Errorf("Path = %q, want /", c.Path)
@@ -42,7 +45,7 @@ func TestSetSessionCookie_SecureOnlyRelaxedInDevMode(t *testing.T) {
 	rec := httptest.NewRecorder()
 	setSessionCookie(rec, "session-value", true)
 
-	if findCookie(t, rec.Result().Cookies(), sessionCookieName).Secure {
+	if findCookie(t, rec.Result().Cookies(), "authgate_session").Secure {
 		t.Error("Secure = true in dev mode, want false for plain-HTTP localhost")
 	}
 }
@@ -62,14 +65,30 @@ func findCookie(t *testing.T, cookies []*http.Cookie, name string) *http.Cookie 
 // SameSite, HttpOnly and Secure it was issued with. A mismatch makes the
 // browser treat the deletion as a different cookie and keep the session.
 func TestClearSessionCookie_MatchesIssuedAttributes(t *testing.T) {
-	rec := httptest.NewRecorder()
-	clearSessionCookie(rec, false)
-
-	c := findCookie(t, rec.Result().Cookies(), sessionCookieName)
-	if c.MaxAge >= 0 || c.Value != "" {
-		t.Errorf("MaxAge = %d, Value = %q, want an expired empty cookie", c.MaxAge, c.Value)
-	}
-	if c.Path != "/" || c.SameSite != http.SameSiteLaxMode || !c.HttpOnly || !c.Secure {
-		t.Errorf("cookie = %+v, want Path=/, Lax, HttpOnly, Secure like setSessionCookie", c)
+	for _, tt := range []struct {
+		name       string
+		devMode    bool
+		cookieName string
+	}{
+		{name: "production", cookieName: "__Host-authgate_session"},
+		{name: "development", devMode: true, cookieName: "authgate_session"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			issued := httptest.NewRecorder()
+			setSessionCookie(issued, "session-value", tt.devMode)
+			c := findCookie(t, issued.Result().Cookies(), tt.cookieName)
+			cleared := httptest.NewRecorder()
+			clearSessionCookie(cleared, tt.devMode)
+			d := findCookie(t, cleared.Result().Cookies(), tt.cookieName)
+			if d.MaxAge >= 0 || d.Value != "" {
+				t.Errorf("MaxAge = %d, Value = %q, want an expired empty cookie", d.MaxAge, d.Value)
+			}
+			if c.Path != "/" || c.Domain != "" || c.SameSite != http.SameSiteLaxMode || !c.HttpOnly || c.Secure == tt.devMode {
+				t.Errorf("issued cookie = %+v, want host-only, Path=/, Lax, HttpOnly, Secure=!devMode", c)
+			}
+			if d.Path != c.Path || d.Domain != c.Domain || d.SameSite != c.SameSite || d.HttpOnly != c.HttpOnly || d.Secure != c.Secure {
+				t.Errorf("deletion cookie = %+v, want attributes matching issued cookie %+v", d, c)
+			}
+		})
 	}
 }

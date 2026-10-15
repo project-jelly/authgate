@@ -26,7 +26,8 @@ type OIDCProvider struct {
 	rp   rp.RelyingParty
 	// ch is the cookie handler used for the state/PKCE cookies and the
 	// per-login nonce cookie. nil when no cookie secret was configured.
-	ch *httphelper.CookieHandler
+	ch              *httphelper.CookieHandler
+	nonceCookieName string
 }
 
 // Option configures OIDCProvider construction.
@@ -95,7 +96,11 @@ func NewOIDCProvider(ctx context.Context, issuerURL, clientID, clientSecret, red
 	}
 
 	var ch *httphelper.CookieHandler
+	nonceCookieName := "nonce"
 	if o.cookieSet {
+		if o.cookieSecure {
+			nonceCookieName = "__Host-authgate_nonce"
+		}
 		hashKey := sha256.Sum256([]byte("authgate.upstream.cookie.hash:" + o.cookieSecret))
 		encryptKey := sha256.Sum256([]byte("authgate.upstream.cookie.enc:" + o.cookieSecret))
 		chOpts := []httphelper.CookieHandlerOpt{httphelper.WithMaxAge(600)}
@@ -128,9 +133,10 @@ func NewOIDCProvider(ctx context.Context, issuerURL, clientID, clientSecret, red
 	}
 
 	return &OIDCProvider{
-		name: deriveProviderName(relyingParty.Issuer()),
-		rp:   relyingParty,
-		ch:   ch,
+		name:            deriveProviderName(relyingParty.Issuer()),
+		rp:              relyingParty,
+		ch:              ch,
+		nonceCookieName: nonceCookieName,
 	}, nil
 }
 
@@ -145,26 +151,35 @@ func (p *OIDCProvider) Redirect(w http.ResponseWriter, r *http.Request, state st
 		urlParams = append(urlParams, rp.WithPromptURLParam(o.prompt))
 	}
 	if p.ch != nil {
-		if nonce, err := generateNonce(); err == nil {
-			if err := p.ch.SetCookie(w, "nonce", nonce); err == nil {
-				urlParams = append(urlParams, rp.WithURLParam("nonce", nonce))
-			}
+		nonce, err := generateNonce()
+		if err != nil {
+			http.Error(w, "authentication failed", http.StatusInternalServerError)
+			return
 		}
+		if err := p.ch.SetCookie(w, p.nonceCookieName, nonce); err != nil {
+			http.Error(w, "authentication failed", http.StatusInternalServerError)
+			return
+		}
+		urlParams = append(urlParams, rp.WithURLParam("nonce", nonce))
 	}
 	rp.AuthURLHandler(func() string { return state }, p.rp, urlParams...).ServeHTTP(w, r)
 }
 
 // Callback verifies the state cookie + PKCE + id_token nonce, exchanges the
 // code, fetches userinfo, and invokes onSuccess. On failure CodeExchangeHandler
-// writes its own error response and onSuccess is not called.
+// writes its own error response and onSuccess is not called. A missing or
+// invalid nonce cookie is rejected here before CodeExchangeHandler is invoked.
 func (p *OIDCProvider) Callback(w http.ResponseWriter, r *http.Request, onSuccess func(w http.ResponseWriter, r *http.Request, state string, info *UserInfo)) {
 	if p.ch != nil {
-		// Pass the per-login nonce from its cookie into the verifier (via ctx),
-		// then drop the cookie so it cannot be replayed.
-		if nonce, err := p.ch.CheckCookie(r, "nonce"); err == nil {
-			r = r.WithContext(context.WithValue(r.Context(), nonceCtxKey{}, nonce))
-			p.ch.DeleteCookie(w, "nonce")
+		// Require the expected, authenticated cookie before any code exchange.
+		// Never fall back to the unprefixed development cookie in production.
+		nonce, err := p.ch.CheckCookie(r, p.nonceCookieName)
+		p.ch.DeleteCookie(w, p.nonceCookieName)
+		if err != nil || nonce == "" {
+			http.Error(w, "authentication failed", http.StatusUnauthorized)
+			return
 		}
+		r = r.WithContext(context.WithValue(r.Context(), nonceCtxKey{}, nonce))
 	}
 	cb := rp.UserinfoCallback[*oidc.IDTokenClaims, *oidc.UserInfo](
 		func(w http.ResponseWriter, r *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, _ rp.RelyingParty, info *oidc.UserInfo) {

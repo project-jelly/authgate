@@ -226,6 +226,7 @@ sequenceDiagram
 | PKCE 없음 / plain | `invalid_request` | 400 | S256만 허용 |
 | state 누락/불일치 | `invalid_request` | 400 | CSRF 보호 |
 | state 쿠키 누락/불일치 (로그인 CSRF) | `authentication failed` | 401 | 상위 핸들러(`rp.CodeExchangeHandler`)가 state 쿠키 검증 실패 시 일반 메시지로 거부 |
+| nonce 쿠키 누락·변조·빈 값 | `authentication failed` | 401 | 예상 이름의 쿠키를 삭제하고 IdP 코드 교환 전에 거부. 운영에서 기존 `nonce` 쿠키는 인정하지 않음 |
 | IdP 코드 교환 실패 / IdP 서버 오류 | `authentication failed` | 401 | 상위 핸들러가 교환 실패를 일반 메시지로 거부 (내부 오류 문자열 미노출) |
 | DB 오류 (유저 조회) | `internal_error` | 500 | 가입 시도 안 함 |
 | 이메일 충돌 | `email_conflict` | 409 | 같은 email, 다른 IdP sub |
@@ -263,10 +264,11 @@ RecoverUser 자체는 원자적이다 (단일 UPDATE).
 - 모든 `/authorize` 요청에서 PKCE S256 필수 (plain 불허, code_challenge 누락 불허). `skip_pkce: true`인 browser 채널 confidential 클라이언트만 예외이며, 그 경우 client_secret이 보호 수단이 된다. 클라이언트 조회에 실패하면 PKCE를 강제한다(fail-safe).
 - 상위 IdP 로그인 CSRF 방어: `state`(authRequestID)를 암호화된 state 쿠키에 바인딩하고 콜백에서 대조 (`rp.AuthURLHandler` / `rp.CodeExchangeHandler`). 콜백을 시작한 브라우저만 완료 가능 → 인가코드 인젝션/세션 스왑 차단
 - 상위 IdP 교환에 PKCE(S256) 적용 (`rp.WithPKCE`)
-- 상위 IdP id_token `nonce` 검증: 로그인 시작 시 요청별 nonce를 생성해 nonce 쿠키 + authorize 파라미터로 보내고, 콜백에서 id_token의 nonce와 대조 (`rp.WithNonce`) → id_token 재생/주입 차단
+- 상위 IdP id_token `nonce` 검증: 로그인 시작 시 요청별 nonce를 생성해 인증·암호화된 쿠키와 authorize 파라미터로 보낸다. 운영 쿠키는 `__Host-authgate_nonce` (`Secure`, `HttpOnly`, `SameSite=Lax`, Path=`/`, Domain 없음), `DEV_MODE=true`에서는 기존 `nonce` 이름과 평문 HTTP를 사용한다. 운영에서는 기존 이름으로 폴백하지 않는다. nonce 생성 또는 쿠키 인코딩에 실패하면 500으로 중단하며 IdP로 리다이렉트하지 않는다.
+  - 콜백은 예상 이름의 쿠키를 삭제하고 누락·변조·빈 값을 코드 교환 **전에** 401로 거부한다. 이후 `rp.WithNonce`가 발급된 id_token의 nonce를 쿠키 값과 대조한다. state·PKCE 검증은 기존 라이브러리 핸들러가 맡는다. Browser / Device / MCP가 같은 규칙을 사용한다.
 - confidential 클라이언트: client_secret bcrypt 검증
 - public 클라이언트: client_secret 없음, PKCE가 유일한 보호
-- 세션 쿠키: `HttpOnly`, `SameSite=Lax`, `Secure=!DevMode`
+- 세션 쿠키: 운영은 `__Host-authgate_session`, `HttpOnly`, `SameSite=Lax`, `Secure`, Path=`/`, Domain 없음. 발급·조회·로그아웃 삭제가 같은 이름을 사용한다. `DEV_MODE=true`만 기존 `authgate_session` 이름과 `Secure=false`를 사용하며, 운영에서는 접두사 없는 이름으로 폴백하지 않는다. 브라우저의 `__Host-` 제약으로 형제 서브도메인의 부모 도메인 쿠키 주입을 막는다. 전환 시 한 번의 재로그인과 진행 중 로그인 재시작이 필요하다 ([Spec 010](010-upgrade-compatibility.md#로그인-쿠키-전환)).
   - `Strict`이 아닌 이유: 세션 쿠키는 상위 IdP에서 돌아오는 콜백에서 발급된 뒤 리다이렉트를 한 번 더 타야 한다 (디바이스 플로우는 `/device?user_code=`). WebKit은 그 마지막 홉의 same-site 여부를 리다이렉트 체인 전체로 판단하는데, 체인의 시작이 상위 IdP(cross-site)이므로 `Strict` 쿠키를 보내지 않는다. 그 결과 Safari에서는 디바이스 플로우를 완료할 수 없다. Chromium은 홉마다 site-for-cookies를 갱신해 `Strict`도 전송하므로 이 문제가 드러나지 않는다.
   - `Lax`의 노출 범위는 top-level cross-site GET 내비게이션뿐이다. GET 엔드포인트는 스스로 상태를 바꾸지 않으며 (`/device`는 동의 화면 렌더만, `GET /end_session`은 브라우저 사용자의 유효한 `id_token_hint`가 없으면 확인 화면 렌더만), 상태를 바꾸는 `POST /device/approve`와 로그아웃 확인 POST는 CSRF 토큰 이중 제출로 막는다.
 - CSRF 쿠키 (`__Host-end_session_csrf`, `__Host-device_csrf`): `HttpOnly`, `SameSite=Strict`, `Secure`, Path=`/`, Domain 없음. 각각 로그아웃 확인 화면과 디바이스 동의 화면에서 발급된다.

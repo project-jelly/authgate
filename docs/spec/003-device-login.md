@@ -197,6 +197,8 @@ SELECT ... FOR UPDATE → state 확인 → UPDATE
 
 ## 보안 요구사항
 
+- 세션과 upstream nonce는 [Spec 002의 호스트 전용 쿠키 규칙](002-browser-login.md#보안-요구사항)을 공유한다. 운영은 `__Host-authgate_session` / `__Host-authgate_nonce`만 읽고, nonce 쿠키 누락·변조·빈 값은 코드 교환 전에 401로 거부한다. `DEV_MODE=true`의 기존 이름과 세션 `SameSite=Lax`는 유지한다.
+
 - device_code: 128bit 이상 엔트로피 (32 hex 또는 22 base64url). 추측 불가
 - user_code: 대문자만, 모호한 문자 제외 (0/O, 1/I 등). XXXX-XXXX 형식
 - 만료된 device_code는 승인 불가 (`WHERE expires_at > NOW()`)

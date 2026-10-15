@@ -319,7 +319,7 @@ OIDC RP-Initiated Logout 1.0 §2의 `/end_session` 엔드포인트와 RFC 7009�
 
 | 행위 | 엔드포인트 | 영향 범위 | 감사 이벤트 |
 |------|------------|----------|-------------|
-| 세션 로그아웃 | `GET`/`POST /end_session` (OIDC RP-Initiated Logout) | 요청한 브라우저의 세션 사용자의 `sessions.revoked_at` 갱신(그 사용자의 모든 세션) + `authgate_session` 쿠키 삭제 | 실제로 세션을 종료했을 때 `auth.logout` 1행 |
+| 세션 로그아웃 | `GET`/`POST /end_session` (OIDC RP-Initiated Logout) | 요청한 브라우저의 세션 사용자의 `sessions.revoked_at` 갱신(그 사용자의 모든 세션) + 세션 쿠키(운영 `__Host-authgate_session`, dev `authgate_session`) 삭제 | 실제로 세션을 종료했을 때 `auth.logout` 1행 |
 | 토큰 폐기 | `/oauth/revoke` (RFC 7009) | 제출된 refresh token이 속한 **grant(family) 전체** `revoked_at` 갱신 + tombstone(`reason=revoked`) | `auth.token_revoked` |
 | 재사용 탐지 폐기 | (자동) | family 전체 `revoked_at` 갱신 | `auth.refresh_family_revoked` |
 
@@ -327,7 +327,7 @@ OIDC RP-Initiated Logout 1.0 §2의 `/end_session` 엔드포인트와 RFC 7009�
 
 - `/oauth/revoke`는 제출된 토큰 한 행이 아니라 그 토큰의 **grant 전체**를 폐기한다(RFC 7009 §2.1 허용). 재사용 유예로 한 family에 살아있는 토큰이 여럿일 수 있어, 한 행만 폐기하면 다른 세션이 받은 형제 토큰이 수명 끝까지 살아남기 때문이다. 토큰 원문으로 오든 행 id로 오든(zitadel이 `GetRefreshTokenInfo` 후 id를 넘기거나, 해석에 실패하면 원문을 그대로 넘김) 같다. 단, **요청한 클라이언트에게 발급된 토큰일 때만** 폐기한다(RFC 7009 §2.1). 다른 클라이언트의 토큰이면 아무것도 폐기하지 않고 200을 돌려준다. 감사 행의 `user_id`는 grant 소유자다.
 - `/end_session`은 **세션만** 폐기한다. zitadel 기본 핸들러가 아니라 authgate 핸들러(`internal/handler/logout.go`)가 처리한다. authgate는 access token을 stateless로 발급(만료 시각만 검증)하므로 즉시 무효화할 수 없고, refresh token은 자연 만료, 명시적 `/oauth/revoke`, 또는 family 폐기 전까지 유효하다.
-- **확인 절차 (RP-Initiated Logout 1.0 §2)**: 요청은 `op.ValidateEndSessionRequest`로 검증한다(`id_token_hint` 서명·issuer, `client_id`와 hint의 `azp` 일치). 클라이언트가 등록하지 않은 `post_logout_redirect_uri`는 따라가지 않고 **버린 뒤 로그아웃을 계속한다**(클라이언트 라이브러리가 기본으로 보내므로 400으로 막으면 로그아웃이 안 된다). 그 밖의 검증 실패는 에러 페이지 400. 이어서 `authgate_session` 쿠키로 브라우저 사용자를 찾는다(비활성 계정의 세션도 종료 대상).
+- **확인 절차 (RP-Initiated Logout 1.0 §2)**: 요청은 `op.ValidateEndSessionRequest`로 검증한다(`id_token_hint` 서명·issuer, `client_id`와 hint의 `azp` 일치). 클라이언트가 등록하지 않은 `post_logout_redirect_uri`는 따라가지 않고 **버린 뒤 로그아웃을 계속한다**(클라이언트 라이브러리가 기본으로 보내므로 400으로 막으면 로그아웃이 안 된다). 그 밖의 검증 실패는 에러 페이지 400. 이어서 세션 쿠키(운영 `__Host-authgate_session`, dev `authgate_session`)로 브라우저 사용자를 찾는다(비활성 계정의 세션도 종료 대상).
 
   | 브라우저 세션 쿠키 | 유효한 `id_token_hint` | 동작 |
   |---|---|---|
@@ -338,7 +338,7 @@ OIDC RP-Initiated Logout 1.0 §2의 `/end_session` 엔드포인트와 RFC 7009�
   `/end_session`은 **요청한 브라우저의 세션만** 끝낸다. 세션 쿠키 없이 온 `id_token_hint`로는 아무도 로그아웃시키지 않는다. id_token은 여러 RP에 전달되고 로그·브라우저 기록에 남으며 만료된 것도 hint로 받아들여지므로, 그것을 가졌다는 사실이 소유자의 로그아웃 요청이 아니기 때문이다. 세션 조회가 실패하면(DB 장애 등) 확인 후 쿠키만 지워 이 브라우저라도 로그아웃되게 한다.
 
   확인 페이지는 원래 파라미터를 hidden 필드로 되돌려 보내고, POST는 다시 파싱·검증한다. 확인 POST는 same-origin 검사(`Sec-Fetch-Site`/`Origin`)와 double-submit CSRF(`__Host-end_session_csrf` 쿠키, dev에서는 `end_session_csrf`: `HttpOnly`, `SameSite=Strict`, Path=`/`, `Secure=!DevMode`, [Spec 002](002-browser-login.md))가 모두 통과해야 하며, 불일치는 403이고 아무것도 종료하지 않는다. 확인 없이는 임의 사이트가 링크 하나로 방문자를 로그아웃시킬 수 있기 때문이다.
-- **완료**: 요청이 **실제로 가져온** `authgate_session`(발급 때와 같은 속성, 응답 헤더 `Max-Age=0`)과 CSRF 쿠키만 지운다. 교차 사이트 POST는 Lax 세션 쿠키를 보내지 않지만, 그 top-level 응답의 삭제 `Set-Cookie`는 브라우저가 적용하므로, 가져오지 않은 쿠키까지 지우면 확인 없이 로그아웃시키는 경로가 된다. 클라이언트에 등록된 `post_logout_redirect_uri`가 검증되었으면 `state`를 붙여 302로 보내고, 아니면 로그아웃 완료 페이지(200)를 렌더링한다. 빈 URL로는 리다이렉트하지 않는다. 현재 클라이언트 설정에는 `post_logout_redirect_uri` 등록 항목이 없으므로(`PostLogoutRedirectURIs()`가 빈 목록) 로그아웃은 항상 완료 페이지로 끝난다.
+- **완료**: 요청이 **실제로 가져온** 세션 쿠키(운영 `__Host-authgate_session`, dev `authgate_session`; 발급 때와 같은 속성, 응답 헤더 `Max-Age=0`)과 CSRF 쿠키만 지운다. 교차 사이트 POST는 Lax 세션 쿠키를 보내지 않지만, 그 top-level 응답의 삭제 `Set-Cookie`는 브라우저가 적용하므로, 가져오지 않은 쿠키까지 지우면 확인 없이 로그아웃시키는 경로가 된다. 클라이언트에 등록된 `post_logout_redirect_uri`가 검증되었으면 `state`를 붙여 302로 보내고, 아니면 로그아웃 완료 페이지(200)를 렌더링한다. 빈 URL로는 리다이렉트하지 않는다. 현재 클라이언트 설정에는 `post_logout_redirect_uri` 등록 항목이 없으므로(`PostLogoutRedirectURIs()`가 빈 목록) 로그아웃은 항상 완료 페이지로 끝난다.
 - 로그아웃 뒤 다음 `/authorize`는 세션을 재사용하지 않고 상위 IdP로 보낸다. 잘못된 Google 계정에 묶인 브라우저가 계정을 바꾸는 경로다.
 - `auth.logout` 이벤트를 "세션 + 토큰 모두 무효화"로 해석해서는 안 된다. 감사 컨슈머는 refresh token 무효화 여부를 확인하려면 `auth.token_revoked` / `auth.refresh_family_revoked`를 함께 추적해야 한다.
 - RP가 로그아웃 시 토큰까지 폐기하려면 `/end_session` 호출과 별도로 `/oauth/revoke`를 호출해야 한다 (또는 두 엔드포인트가 실제로 받아들이는 인증 방식은 [Spec 004 §AS Metadata](004-mcp-login.md#authorization-server-metadata)에 광고된 그대로다).

@@ -2,7 +2,14 @@ package handler
 
 import "net/http"
 
-const sessionCookieName = "authgate_session"
+// Production never accepts the unprefixed development name: a sibling host
+// could otherwise inject a parent-domain cookie under that name.
+func sessionCookieName(devMode bool) string {
+	if devMode {
+		return "authgate_session"
+	}
+	return "__Host-authgate_session"
+}
 
 // setSessionCookie issues the browser session.
 //
@@ -25,7 +32,7 @@ const sessionCookieName = "authgate_session"
 func setSessionCookie(w http.ResponseWriter, sessionID string, devMode bool) {
 	//nolint:gosec // Secure=false is allowed only in explicit DEV_MODE for localhost development.
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
+		Name:     sessionCookieName(devMode),
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
@@ -40,7 +47,7 @@ func setSessionCookie(w http.ResponseWriter, sessionID string, devMode bool) {
 func clearSessionCookie(w http.ResponseWriter, devMode bool) {
 	//nolint:gosec // Secure=false is allowed only in explicit DEV_MODE for localhost development.
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
+		Name:     sessionCookieName(devMode),
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -50,8 +57,8 @@ func clearSessionCookie(w http.ResponseWriter, devMode bool) {
 	})
 }
 
-func getSessionCookie(r *http.Request) string {
-	c, err := r.Cookie(sessionCookieName)
+func getSessionCookie(r *http.Request, devMode bool) string {
+	c, err := r.Cookie(sessionCookieName(devMode))
 	if err != nil {
 		return ""
 	}

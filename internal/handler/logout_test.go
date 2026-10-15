@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -74,9 +75,11 @@ type fakeLogoutStore struct {
 	sessions   map[string]string // session id → user id
 	lookupErr  error
 	terminated []string
+	lookups    []string
 }
 
 func (s *fakeLogoutStore) GetValidSession(_ context.Context, sessionID string) (*storage.User, error) {
+	s.lookups = append(s.lookups, sessionID)
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -106,7 +109,7 @@ func postEndSession(form url.Values, cookies ...*http.Cookie) *http.Request {
 	return req
 }
 
-var browserSession = &http.Cookie{Name: sessionCookieName, Value: "sess-1"}
+var browserSession = &http.Cookie{Name: sessionCookieName(false), Value: "sess-1"}
 
 // ── Confirmation requirement ─────────────────────────────────────────────────
 
@@ -174,7 +177,7 @@ func TestEndSession_ConfirmWithoutValidCSRF_Forbidden(t *testing.T) {
 				t.Fatalf("terminated %v without a valid csrf token", store.terminated)
 			}
 			for _, c := range rec.Result().Cookies() {
-				if c.Name == sessionCookieName {
+				if c.Name == sessionCookieName(false) {
 					t.Fatalf("session cookie was touched on a rejected confirmation: %+v", c)
 				}
 			}
@@ -200,7 +203,7 @@ func TestEndSession_ConfirmedWithValidCSRF_EndsSessionAndClearsCookies(t *testin
 		t.Fatalf("terminated = %v, want [user-1]", store.terminated)
 	}
 	cookies := rec.Result().Cookies()
-	if c := findCookie(t, cookies, sessionCookieName); c.MaxAge >= 0 || c.Value != "" {
+	if c := findCookie(t, cookies, sessionCookieName(false)); c.MaxAge >= 0 || c.Value != "" {
 		t.Errorf("session cookie = %+v, want it expired", c)
 	}
 	if c := findCookie(t, cookies, csrfCookieName(logoutCSRFCookie, false)); c.MaxAge >= 0 {
@@ -288,7 +291,7 @@ func TestEndSession_SessionLookupError_ConfirmThenClearsCookie(t *testing.T) {
 	}
 	cleared := false
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == sessionCookieName && c.MaxAge < 0 {
+		if c.Name == sessionCookieName(false) && c.MaxAge < 0 {
 			cleared = true
 		}
 	}
@@ -316,5 +319,40 @@ func TestEndSession_OtherMethods_NotAllowed(t *testing.T) {
 	h.HandleEndSession(rec, httptest.NewRequest(http.MethodPut, "/end_session", nil))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+// Exercise the handler as well as the cookie helper: a legacy cookie alone
+// cannot resolve a production session or trigger its logout confirmation.
+func TestEndSession_ProductionIgnoresLegacySessionCookie(t *testing.T) {
+	for _, withHostCookie := range []bool{false, true} {
+		t.Run(fmt.Sprintf("host cookie=%t", withHostCookie), func(t *testing.T) {
+			h, store := newTestLogoutHandler()
+			store.sessions["injected-session"] = "attacker"
+			req := httptest.NewRequest(http.MethodGet, "/end_session", nil)
+			// Put the legacy name first, as a longer-path parent-domain cookie
+			// could appear before the real cookie in the browser's header.
+			req.AddCookie(&http.Cookie{Name: "authgate_session", Value: "injected-session"})
+			if withHostCookie {
+				req.AddCookie(&http.Cookie{Name: "__Host-authgate_session", Value: "sess-1"})
+			}
+			rec := httptest.NewRecorder()
+			h.HandleEndSession(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			cookies := rec.Result().Cookies()
+			if withHostCookie {
+				findCookie(t, cookies, "__Host-end_session_csrf")
+				if len(store.lookups) != 1 || store.lookups[0] != "sess-1" {
+					t.Fatalf("session lookups = %v, want only the host-bound session", store.lookups)
+				}
+			} else if len(cookies) != 0 || len(store.lookups) != 0 {
+				t.Fatalf("legacy cookie triggered session lookup or response: lookups=%v, cookies=%+v", store.lookups, cookies)
+			}
+			if len(store.terminated) != 0 {
+				t.Fatalf("terminated sessions without confirmation: %v", store.terminated)
+			}
+		})
 	}
 }

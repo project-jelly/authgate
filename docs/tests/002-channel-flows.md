@@ -132,13 +132,13 @@ Browser / Device / MCP / Refresh / Logout / Delete 각 채널이 공통 상태�
 |----|----------|------|----------|------------|
 | `logout-001` | 세션 없음 | `GET /end_session` (hint 없음) | 200 로그아웃 완료 페이지, 리다이렉트 없음, `auth.logout` 0 | 종료할 것 없음 |
 | `logout-002` | 유효 세션 | `GET /end_session` (hint 없음) | 200 확인 페이지 + `csrf_token`, 세션 유지 | §2 확인 필수 |
-| `logout-003` | 유효 세션 | 확인 POST (CSRF 일치) | 세션 폐기, `authgate_session` 만료, `auth.logout` 1, 다음 `/login`은 IdP로 | 계정 전환 경로 |
+| `logout-003` | 유효 세션 | 확인 POST (CSRF 일치) | 세션 폐기, 세션 쿠키(운영 `__Host-authgate_session`, dev `authgate_session`) 만료, `auth.logout` 1, 다음 `/login`은 IdP로 | 계정 전환 경로 |
 | `logout-004` | 유효 세션 | 확인 POST (CSRF 누락/불일치) | 403, 세션 유지, `auth.logout` 0 | CSRF 방어 |
 | `logout-005` | 유효 세션 | `id_token_hint` = 세션 사용자 | 확인 없이 종료, 쿠키 만료, `auth.logout.client_id` = hint `azp` | hint가 확인을 대신 |
 | `logout-006` | 사용자 B 세션 | `id_token_hint` = 사용자 A | 확인 페이지, 확인 POST 후 B 세션만 폐기(A 유지), `auth.logout` 1 | 다른 사용자 hint는 증거가 아님 |
 | `logout-007` | 유효 세션 | 서명 불일치/형식 오류 `id_token_hint` | 400, 세션 유지 | hint 검증 |
 | `logout-008` | 사용자 세션(다른 브라우저) | 쿠키 없이 유효한 `id_token_hint` | 완료 페이지, 세션 유지, `auth.logout` 0 | hint만으로 로그아웃 불가 |
-| `logout-009` | — | 쿠키 없는 POST | 200, `authgate_session`/`end_session_csrf` Set-Cookie 없음 | 교차 사이트 POST 강제 로그아웃 차단 |
+| `logout-009` | — | 쿠키 없는 POST | 200, 세션/로그아웃 CSRF Set-Cookie 없음 | 교차 사이트 POST 강제 로그아웃 차단 |
 | `logout-010` | 유효 세션 | `confirm` 없는 POST | 확인 페이지, 세션 유지 | RP의 POST 요청은 확인이 아님 |
 | `logout-011` | 유효 세션 | 세션 사용자 hint + 미등록 `post_logout_redirect_uri` | 로그아웃 완료 페이지, 리다이렉트 없음, 세션 폐기 | 미등록 URI는 버리고 로그아웃 계속 |
 | `logout-012` | 유효 세션 | hint + `azp`와 다른 `client_id` | 400, 세션 유지 | 클라이언트 일치 |
@@ -164,6 +164,8 @@ Browser / Device / MCP / Refresh / Logout / Delete 각 채널이 공통 상태�
 | `logout-unit-006` | 유효 세션 | 미등록 `post_logout_redirect_uri` + `client_id` | 확인 페이지, 리다이렉트·종료 없음 | open redirect 차단, 로그아웃은 계속 |
 | `logout-unit-007` | 세션 조회 오류 | GET → 확인 POST | 확인 페이지 → 세션 쿠키 만료 | 장애 시에도 이 브라우저 로그아웃 |
 | `logout-unit-008` | — | 쿠키 없는 POST | Set-Cookie 없음 | 가져오지 않은 쿠키는 지우지 않음 |
+| `session-cookie-004` | 운영 / dev | 발급·조회·삭제 | 운영 `__Host-authgate_session`, dev `authgate_session`; 운영에서 기존 이름만 있으면 세션 없음, 기존 이름이 앞에 있어도 호스트 쿠키 값만 조회 | Secure·Path·Domain·SameSite 및 폴백 금지 |
+| `logout-unit-009` | 운영, 기존 이름의 유효한 공격자 세션 / 뒤에 호스트 세션 있음 | 실제 `HandleEndSession` 호출 | 기존 이름만 있으면 조회·삭제·종료 없음; 호스트 쿠키가 있으면 그 세션만 조회 후 확인 화면 | handler의 devMode 전달·쿠키 순서 회귀 |
 | `session-cookie-003` | — | `clearSessionCookie` | 발급과 같은 속성 + `Max-Age<0` | 브라우저가 같은 쿠키로 인식 |
 | `csrf-unit-001` | — | 쿠키 이름 계산 | 운영은 `__Host-` 접두사, dev는 접두사 없음 | 접두사 요건(Secure)과 localhost 비호환 |
 | `csrf-unit-002` | — | 발급/삭제 쿠키 | Path=`/`, Domain 없음, HttpOnly, Strict, Secure=!dev, 삭제 쿠키 속성 일치 | `__Host-` 요건·삭제 누락 방지 |

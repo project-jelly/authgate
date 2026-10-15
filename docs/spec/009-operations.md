@@ -141,7 +141,7 @@ authgate를 처음 배포할 때 필요한 것:
 - `PUBLIC_URL`이 `https://`로 시작하지 않으면 **서버 시작 거부** (issuer/authorization/token endpoint가 평문으로 광고되는 것을 방지)
 - `OIDC_ISSUER_URL`이 `https://`로 시작하지 않으면 **서버 시작 거부**
 - `OIDC_CLIENT_ID` 또는 `OIDC_CLIENT_SECRET`이 비어있으면 **서버 시작 거부**
-- 쿠키 `Secure=true`
+- 쿠키 `Secure=true`. 브라우저 세션은 `__Host-authgate_session`, 자체 upstream nonce는 `__Host-authgate_nonce`를 사용하며 두 쿠키 모두 Path=`/`, Domain 없음. 기존 이름을 읽는 폴백은 없다. 전환 시 재로그인과 진행 중 로그인 재시작이 필요하다 ([업그레이드 안내](010-upgrade-compatibility.md#로그인-쿠키-전환)).
 - `op.WithAllowInsecure()` 비활성
 
 ## 시크릿 관리

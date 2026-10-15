@@ -9,6 +9,25 @@
 마이그레이션 자체는 authgate 시작 시 자동 적용된다 ([009 운영](009-operations.md) 참조).
 이 문서는 "어떤 순서로, 어떤 주의로 버전을 올리는가"를 다룬다.
 
+## 로그인 쿠키 전환
+
+운영(`DEV_MODE=false`)의 세션 쿠키를 `authgate_session`에서
+`__Host-authgate_session`으로, 자체 upstream nonce 쿠키를 `nonce`에서
+`__Host-authgate_nonce`로 바꾼다. 두 쿠키는 `Secure`, `HttpOnly`, `SameSite=Lax`,
+Path=`/`, Domain 없음이며 기존 이름을 읽는 폴백은 제공하지 않는다.
+형제 서브도메인이 부모 도메인 쿠키를 심어 로그인 계정을 바꾸는 경로를 막기 위한 전환이다.
+
+- 기존 브라우저는 AuthGate에 **한 번 다시 로그인**해야 한다. 배포 전에 시작한
+  Browser / Device / MCP upstream 로그인은 예상 nonce 쿠키가 없어 401이 될 수 있으므로
+  로그인 시작 화면부터 다시 진행한다.
+- 구·신 버전이 공존하는 롤링 구간에는 서로 다른 쿠키 이름을 읽으므로 세션 재사용이나
+  진행 중 콜백이 실패할 수 있다. 롤아웃 완료 후 로그인 재시작으로 복구한다.
+- DB 세션·토큰 family를 일괄 폐기하지 않는다. 이미 발급된 access/refresh token은
+  기존 수명·폐기 규칙을 따른다. `SESSION_SECRET`이나 서명 키 교체도 필요하지 않다.
+- `DEV_MODE=true`의 HTTP 개발 환경은 기존 `authgate_session` / `nonce` 이름과
+  `Secure=false`를 유지한다. 세션 `SameSite=Lax`는 Safari Device 리다이렉트 호환을 위해 유지한다.
+- 이번 전환은 라이브러리 내부 `state` / `pkce` 쿠키 이름을 바꾸지 않는다.
+
 ## Distroless 실행 이미지 전환
 
 실행 이미지가 Alpine에서 Distroless static Debian 13으로 바뀐다.

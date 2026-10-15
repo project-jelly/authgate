@@ -28,7 +28,7 @@ func NewLoginHandler(loginService *service.LoginService, provider upstream.Provi
 // HandleLogin handles GET /login?authRequestID=xxx
 func (h *LoginHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	authRequestID := r.URL.Query().Get("authRequestID")
-	sessionID := getSessionCookie(r)
+	sessionID := getSessionCookie(r, h.devMode)
 	info := clientinfo.FromContext(r.Context())
 
 	result := h.loginService.HandleLogin(r.Context(), authRequestID, sessionID, info.IP, info.UserAgent)
