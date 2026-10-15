@@ -37,6 +37,14 @@ types and advertises its issuer-response and MCP/CIMD policies. `app/routes.go`
 keeps `middleware.NoStore` outside the token rate limiter and response adapter,
 so app-owned rejections and rewritten tokens share the cache prohibition.
 
+`middleware/access_token_typ.go` adapts the trusted provider's token response:
+it normalizes the access-token profile and rebinds the ID token's `at_hash`.
+Its only storage dependency is the `SigningKey(ctx)` contract; key selection
+and ownership remain in `storage`. The verified access-claims context used by
+UserInfo/introspection stays private to `storage`. Response rewriting happens
+after the provider's grant transaction and does not undo a committed grant on
+signing or HTTP failure.
+
 ## Login navigation
 
 | File | Responsibility |
