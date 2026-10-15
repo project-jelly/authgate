@@ -21,6 +21,8 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+	"github.com/kangheeyong/authgate/internal/storage"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // The files contain only keys generated for this test. Each setup loads the
@@ -138,6 +140,54 @@ func TestIntegration_SigningKeyBundle_GrantsAndRotationBoundaries(t *testing.T) 
 	assertBundleHintHTTP(t, removed, oldHint, false)
 	assertBundleHintHTTP(t, removed, historicalHint, false)
 	assertBundleHintHTTP(t, retired, oldHint, true)
+
+	// Replace the client registration only after all authorize/logout checks:
+	// introspection requires client authentication, including for an invalid
+	// or unpublished token. Both endpoint adapters must use published keys.
+	const introspectionSecret = "bundle-introspection-test-secret" // #nosec G101 -- test credential
+	hash, err := bcrypt.GenerateFromPassword([]byte(introspectionSecret), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash introspection credential: %v", err)
+	}
+	secretHash := string(hash)
+	for _, node := range []struct {
+		name      string
+		server    *TestServer
+		oldActive bool
+	}{
+		{"prepublish", a, true},
+		{"active", b, true},
+		{"retired", retired, false},
+		{"removed", removed, false},
+	} {
+		node.server.Store.LoadClients([]storage.ClientConfigEntry{{
+			ClientID: "test-client", ClientType: "confidential", ClientSecretHash: &secretHash,
+		}})
+		t.Run(node.name+"_introspection", func(t *testing.T) {
+			for _, token := range []struct {
+				name, value string
+				active      bool
+			}{
+				{"old", first.AccessToken, node.oldActive},
+				{"new", newTokens.AccessToken, true},
+				{"hint_only", historicalAccess, false},
+			} {
+				t.Run(token.name, func(t *testing.T) {
+					status, result := bundleIntrospection(t, node.server, token.value, introspectionSecret)
+					if status != http.StatusOK || result["active"] != token.active {
+						t.Fatalf("introspection status=%d active=%v, want 200 active=%v", status, result["active"], token.active)
+					}
+					if token.active && (result["client_id"] != "test-client" || result["scope"] == nil || result["exp"] == nil) {
+						t.Fatal("active introspection is missing verified client/scope/expiry")
+					}
+				})
+			}
+			status, _ := bundleIntrospection(t, node.server, historicalAccess, "wrong-secret")
+			if status == http.StatusOK {
+				t.Fatal("inactive token bypassed introspection client authentication")
+			}
+		})
+	}
 }
 
 type bundleTestKey struct {
@@ -260,6 +310,28 @@ func assertBundleUserinfo(t *testing.T, ts *TestServer, token string, status int
 	if got, _ := userinfoRequest(t, ts, token); got != status {
 		t.Fatalf("userinfo status=%d, want %d", got, status)
 	}
+}
+
+func bundleIntrospection(t *testing.T, ts *TestServer, token, secret string) (int, map[string]any) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.BaseURL+"/oauth/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
+	if err != nil {
+		t.Fatalf("introspection request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", secret)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("introspection: %v", err)
+	}
+	defer resp.Body.Close()
+	var result map[string]any
+	if resp.StatusCode == http.StatusOK {
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("introspection response: %v", err)
+		}
+	}
+	return resp.StatusCode, result
 }
 
 func resignBundleTestToken(t *testing.T, token string, key bundleTestKey, typ string, change func(map[string]any)) string {

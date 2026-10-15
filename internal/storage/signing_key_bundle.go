@@ -125,7 +125,7 @@ func parseSigningKeyBundle(data []byte) (*SigningKeyBundle, error) {
 		ids[key.id] = struct{}{}
 		material[key.fingerprint] = struct{}{}
 		if key.id == activeID {
-			if !publish || key.public.E != active.PublicKey.E || key.public.N.Cmp(active.PublicKey.N) != 0 {
+			if !publish || key.public.E != active.E || key.public.N.Cmp(active.N) != 0 {
 				return nil, errors.New("signing key bundle: active key does not match published key")
 			}
 			activeFound = true

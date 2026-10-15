@@ -78,6 +78,8 @@ HTTP provider와 PostgreSQL DB 하나로 다음을 검증한다.
 - 3개 공개 키를 제공하는 JWKS에 private RSA 필드와 hint 전용 키가 없는지 확인.
 - 같은 issuer·DB를 공유하는 별도 provider 인스턴스의 재시작 복원과 구·신 토큰의
   양방향 UserInfo 검증. 파일 덮어쓰기 후 기존 인스턴스의 active 키 불변성.
+- A/B 및 공개 종료·삭제 단계의 실제 introspection에서 구·신·hint-only access token의
+  active 판정과 client/scope/expiry 반환. 비활성 토큰도 잘못된 Basic 인증을 거부.
 - 구 키 공개 종료 후 access 거부와 expired hint의 authorize/logout 수용,
   두 목록에서 완전히 제거한 뒤 양쪽 hint 진입점 거부.
 
