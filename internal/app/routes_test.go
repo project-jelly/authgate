@@ -2,8 +2,6 @@ package app
 
 import (
 	"bytes"
-	"encoding/json"
-	"github.com/kangheeyong/authgate/internal/pages"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -16,26 +14,8 @@ import (
 	"github.com/kangheeyong/authgate/internal/handler"
 	"github.com/kangheeyong/authgate/internal/logctx"
 	"github.com/kangheeyong/authgate/internal/middleware"
+	"github.com/kangheeyong/authgate/internal/pages"
 )
-
-func TestRegisterOAuthMetadataRoute_AdvertisesAuthorizationResponseIssuer(t *testing.T) {
-	mux := http.NewServeMux()
-	registerOAuthMetadataRoute(mux, &config.Config{PublicURL: "https://auth.example.com"})
-
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil))
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("metadata status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	var metadata map[string]any
-	if err := json.NewDecoder(rec.Body).Decode(&metadata); err != nil {
-		t.Fatalf("decode metadata: %v", err)
-	}
-	if supported, ok := metadata["authorization_response_iss_parameter_supported"].(bool); !ok || !supported {
-		t.Fatalf("authorization_response_iss_parameter_supported = %v, want true", metadata["authorization_response_iss_parameter_supported"])
-	}
-}
 
 func TestAuthorizationResponseIssuer_AppendsIssuerOnlyToClientRedirects(t *testing.T) {
 	tests := []struct {

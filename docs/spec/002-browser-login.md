@@ -40,8 +40,12 @@ PKCE S256이 MCP 채널 계약의 일부이기 때문이다 ([Spec 004](004-mcp-
 | GET | `/login` | authgate 핸들러 | `prompt` 확인 → 세션 확인 → 유효하면 auto-approve, 없으면 IdP redirect (`prompt=none`이면 `login_required`) |
 | GET | `/login/callback` | authgate 핸들러 | IdP 코드 교환 → 신규/기존 판별 → 클라이언트 접근 정책 → 세션 생성 |
 | POST | `/oauth/token` | zitadel 라이브러리 | code + code_verifier (+ client_secret) → 토큰 발급 |
-| GET | `/.well-known/openid-configuration` | zitadel 라이브러리 | OIDC Discovery |
+| GET | `/.well-known/openid-configuration` | authgate + zitadel 라이브러리 | OIDC Discovery ([공유 metadata 계약](004-mcp-login.md#authorization-server-metadata)) |
 | GET | `/keys` | zitadel 라이브러리 | 공개키 (토큰 검증용) |
+
+`/oauth/token`의 성공·오류 응답은 `Cache-Control: no-store`, `Pragma: no-cache`를
+포함한다. rate limit과 resource 사전 검증 오류도 포함하며,
+[Spec 005](005-token-lifecycle.md#토큰-응답의-캐시-금지)의 공통 계약을 따른다.
 
 ## 표준
 

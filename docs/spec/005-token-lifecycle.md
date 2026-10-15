@@ -19,7 +19,15 @@ authgate가 발급한 토큰의 갱신, 검증, 폐기 흐름.
 | POST | `/oauth/token` | zitadel 라이브러리 | grant_type=refresh_token → 토큰 갱신 (rotation) |
 | POST | `/oauth/revoke` | zitadel 라이브러리 | refresh_token 폐기 |
 | GET | `/keys` | zitadel 라이브러리 | 공개키 (앱이 JWT 검증에 사용) |
-| GET | `/.well-known/openid-configuration` | zitadel 라이브러리 | Discovery (엔드포인트 URL 조회) |
+| GET | `/.well-known/openid-configuration` | authgate + zitadel 라이브러리 | Discovery ([공유 metadata 계약](004-mcp-login.md#authorization-server-metadata)) |
+
+## 토큰 응답의 캐시 금지
+
+RFC 6749 §5.1에 따라 `/oauth/token`은 `Cache-Control: no-store`와
+`Pragma: no-cache`를 설정한다. production token route의 rate limiter 바깥에서
+적용하므로 authorization code·refresh·device 성공, provider 오류,
+resource 사전 검증 오류와 HTTP 429에 같은 헤더가 포함된다.
+`at+jwt`/`at_hash` 재서명 adapter를 지난 응답도 헤더를 유지한다.
 
 ## 토큰 종류
 

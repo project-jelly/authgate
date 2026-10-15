@@ -22,6 +22,13 @@ Services still use storage models through their store interfaces. The file
 boundaries below improve navigation without changing package APIs or introducing
 a second model hierarchy.
 
+`app/metadata.go` serves both OIDC Discovery and OAuth authorization-server
+metadata from `op.CreateDiscoveryConfig`. The library owns the complete OIDC
+fields, provider endpoints and signing algorithms; AuthGate narrows response/grant
+types and advertises its issuer-response and MCP/CIMD policies. `app/routes.go`
+keeps `middleware.NoStore` outside the token rate limiter and response adapter,
+so app-owned rejections and rewritten tokens share the cache prohibition.
+
 ## Login navigation
 
 | File | Responsibility |

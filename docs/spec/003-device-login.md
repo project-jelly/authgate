@@ -25,6 +25,9 @@ CLI 도구나 입력 제한 장치에서 브라우저를 통해 인증하고 acc
 | GET | `/device/auth/callback` | authgate 핸들러 | Device 전용 IdP callback (state=user_code) |
 | POST | `/oauth/token` | zitadel 라이브러리 | grant_type=device_code → polling → 토큰 발급 |
 
+토큰 polling의 성공·오류 응답은 `Cache-Control: no-store`, `Pragma: no-cache`를
+포함한다. [Spec 005](005-token-lifecycle.md#토큰-응답의-캐시-금지)의 공통 계약을 따른다.
+
 **`/device/auth/callback`은 `/login/callback`과 별도 엔드포인트다.**
 브라우저 로그인의 `state=authRequestID`와 Device의 `state=user_code`가 섞이지 않는다.
 
