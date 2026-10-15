@@ -46,6 +46,8 @@ go.work.sum
 .omc/
 .tmp/
 signing_key.pem
+signing-keys*.json
+signing_key_bundle*.json
 
 # Local screenshots / capture artifacts at the repo root.
 # `docs/images/**` images are still tracked for documentation use.

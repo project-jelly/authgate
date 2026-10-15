@@ -106,7 +106,8 @@ authgate를 처음 배포할 때 필요한 것:
 | `REFRESH_TOKEN_REUSE_GRACE_SEC` | X | `5` | 인증된 confidential client에 한해 방금 교환된 refresh_token을 재사용 탐지 없이 한 번 더 받아주는 시간 (초, `0`~`60`, `0`이면 끔). 한 자격증명을 여러 세션이 동시에 갱신하는 클라이언트가 탈취로 오판돼 강제 로그아웃되는 것을 막는다. Public client/CIMD에는 적용하지 않는다. 규칙은 [Spec 005](005-token-lifecycle.md#재사용-유예-시간-reuse-grace) |
 | `AUDIT_LOG_PII_RETENTION_DAYS` | X | `90` | **최종 사용자** 활동 기록의 PII(`user_id`, IP, User-Agent) 익명화 전 보존일. 최소 `30`. 법정 접속기록 의무는 취급자(운영자) 대상이라 여기 해당하지 않으며, 침해조사 목적의 기간이다 |
 | `ADMIN_AUDIT_LOG_PII_RETENTION_DAYS` | X | `730` | **운영자 조치**(`admin.*`) 기록의 PII 익명화 전 보존일. 최소 `365` — 법정 접속기록 하한 |
-| `SIGNING_KEY_PATH` | X | `signing_key.pem` | JWT 서명용 RSA private key 파일 경로. 운영에서는 persistent secret/volume로 주입 |
+| `SIGNING_KEY_PATH` | X | `signing_key.pem` | 기존 단일 RSA private key 파일 경로. 운영에서는 persistent secret/volume로 주입. nonempty 값으로 명시하면 bundle 경로와 동시 설정 불가 |
+| `SIGNING_KEY_BUNDLE_PATH` | X | — | 시작 시 읽는 키 묶음 JSON 경로. active 개인 키 하나와 published/hint 공개 키를 복원. 파일 누락·오류 시 시작 거부하며 생성·legacy 폴백 없음. 아래 키 로테이션 참조 |
 | `HTTP_READ_HEADER_TIMEOUT_SEC` | X | `5` | HTTP ReadHeader timeout(초) |
 | `HTTP_READ_TIMEOUT_SEC` | X | `15` | HTTP Read timeout(초) |
 | `HTTP_WRITE_TIMEOUT_SEC` | X | `30` | HTTP Write timeout(초) |
@@ -171,6 +172,10 @@ chmod 600 signing_key.pem
 
 **Docker 빌드 컨텍스트에 포함 금지.** 리포 루트의 `signing_key.pem`이 `COPY . .`로 builder 레이어에 진입하면 GHCR에 푸시되는 빌더 캐시(예: `cache-to=type=registry`)나 멀티스테이지 캐시 공유를 통해 RSA private key가 노출될 수 있다. `.dockerignore`가 `signing_key.pem`, `*.pem`, `*.key`, `.env*`를 차단하고 있으니 변경 시 항상 유지하라. 운영에서는 키 파일을 빌드 컨텍스트에 두지 말고 Kubernetes Secret / Vault 등 런타임 시크릿으로 컨테이너에 주입하라.
 
+키 묶음 JSON에도 개인 키가 들어간다. `signing-keys*.json`, `signing_key_bundle*.json`은
+Git과 Docker context에서 제외한다. 임의의 다른 파일명을 쓰더라도 운영 묶음을 저장소나
+빌드 컨텍스트에 두지 않는다. 로그·PR·테스트 fixture에 실제 묶음 원문을 복사하지 않는다.
+
 ### client_secret (각 앱별)
 
 ```bash
@@ -188,19 +193,43 @@ HASH=$(htpasswd -nbBC 10 "" "$SECRET" | cut -d: -f2)
 
 ### 현재 구현과 운영 범위
 
-현재 런타임은 `SIGNING_KEY_PATH`의 RSA 키 **하나**를 시작 시 읽고,
-`kid=authgate-key-1`로 등록한다
-([`mustConfigureSigningKey`](../../internal/app/storage_wiring.go)).
-키 파일 변경을 자동으로 다시 읽거나 current/previous를 복원하는 설정은 없다.
-[`Storage.SetPreviousKey`](../../internal/storage/storage.go)와
-[`signingKeyProvider.KeySet`](../../internal/storage/signing_key_provider.go)은
-current로 서명하고 current/previous 공개 키를 함께 반환하는 보조 기능이지만,
-운영 시작 경로에서 `SetPreviousKey`를 호출하지 않는다.
+`SIGNING_KEY_BUNDLE_PATH`가 미설정·빈 값이면 기존 `SIGNING_KEY_PATH`의 RSA 키 하나를
+읽고 `kid=authgate-key-1`로 등록한다. 기존 모드의 파일 자동 생성 동작도 유지한다.
+bundle 경로가 nonempty이면 [`LoadSigningKeyBundle`](../../internal/storage/signing_key_bundle.go)로
+묶음 전체를 검증하고 [`app wiring`](../../internal/app/storage_wiring.go)에서 적용한다.
+명시적인 nonempty legacy 경로와 동시 설정하면 시작을 거부한다. legacy 환경변수가
+빈 값이면 미설정처럼 처리하고, 공백으로만 된 경로는 어느 모드에서든 구성 오류다.
 
-따라서 안전한 자동 로테이션은 아직 구현되지 않았다. 단순 파일 교체와 재시작은
-구 키로 발급한 JWT의 검증 키를 없애며, 같은 `kid`를 캐시한 소비자에서 신규 JWT 검증도
-실패할 수 있다. 아래 내용은 **향후 구현할 설계와 검증 기준**이며 현재 실행 가능한
-무중단 교체 절차를 뜻하지 않는다.
+묶음은 active 개인 키 하나, 일반 JWKS/access 검증 공개 키, hint 전용 공개 키를
+시작 시 복원하며 프로세스 수명 동안 고정한다. 파일 교체만으로 실행 중인 키가
+바뀌지 않는다. bundle이 없거나 잘못되었으면 새 키 생성이나 legacy 폴백 없이 종료한다.
+시작 로그에는 revision·active kid·public fingerprint와 공개 상태만 남긴다.
+
+운영 키 이관·활성화는 별도 GitOps/Vault 단계이며, 새 기능의 코드 반영이 운영 전환을
+뜻하지 않는다. 자동 회전 scheduler·파일 watcher·키 관리 CLI/API는 없다. 단일 키 모드에서
+파일만 교체하면 기존 토큰 검증과 소비자 캐시가 깨질 수 있다. 아래 게이트를 통과한
+묶음의 단계별 배포로 전환한다.
+
+### 키 묶음 파일 계약
+
+| 필드 | 값과 검증 |
+|------|-----------|
+| `schema_version` | 정수 `1` |
+| `revision` | 운영 변경 ID. 비어 있을 수 없음 |
+| `active_kid` | 공개 상태인 키 하나의 ID |
+| `active_private_key_pem` | 해당 키와 일치하는 PKCS#1 RSA private PEM 하나 |
+| `verification_keys` | `{ "jwk": <public RSA JWK>, "publish": <boolean> }` 목록 |
+
+`publish=true`만 `/keys` 및 자체 access 검증에 사용하고, hint verifier에는 전체 공개 키를
+제공한다. 공개 JWK는 `kty,n,e,kid,alg,use`만 허용하며 RSA 2048–4096비트,
+`alg=RS256`, `use=sig`여야 한다. 새 `kid`는 RFC 7638 SHA-256 thumbprint의
+padding 없는 base64url이며, 기존 키 이관에 한해 `authgate-key-1`을 허용한다.
+기존 ID의 다른 키 재할당 여부는 운영자가 이전 버전과 fingerprint를 비교해야 한다.
+
+알 수 없는 필드·중복 JSON 멤버·trailing JSON·누락/null 필드·중복 ID/키 재료·active
+불일치·private JWK를 거부한다. 파일 최대 256 KiB, 공개 키 최대 128개이며 96개부터
+경고한다. 한도 초과 시 과거 hint 키를 지우지 않고 새 배포를 중단한다.
+실제 개인 키를 포함한 묶음의 생성·보관은 Vault 운영 경계에서 수행한다.
 
 ### 토큰 유효기간과 소비자 JWKS 캐시
 
@@ -240,17 +269,18 @@ JWKS에서 구 키를 제거해도 소비자가 캐시를 즉시 버린다는 �
 일반 JWKS/access 검증 목록과 hint 검증 목록을 분리하며, 정상 회전에서는 hint 키를
 자동 삭제하지 않는다. 개인 키 보존과 공개 키 보존도 분리한다.
 
-이는 아직 런타임에 연결되지 않은 결정이다. 현재 코드에서는 위 두 검증 목록이
-같으므로, 이 문서만으로 구 키를 안전하게 제거할 수 있게 된 것은 아니다.
+bundle 모드는 라이브러리의 `WithIDTokenHintKeySet`으로 두 검증 목록을 분리한다.
+hint 서명은 단일 RS256과 정확한 nonempty `kid`로 검증한다. 기존 단일 키 모드는
+기존 검증 동작을 유지한다. hint 개인 키나 새로운 만료 제한은 필요하지 않다.
 [구현 설계](../architecture/issuer-signing-key-rotation.md)는 시작 시 고정되는 키 묶음,
 Vault/ESO 소유권, 사전 공개·전환·공개 종료·롤백과 소비자별 선행 게이트를 정의한다.
 
-### 향후 전환 단계와 게이트
+### 운영 전환 단계와 게이트
 
 | 단계 | 필요한 상태와 확인 | 실패 시 경계 |
 |------|--------------------|--------------|
 | 키 저장 준비 | 새 키에는 기존과 **다른 `kid`**를 부여한다. active 개인 키 하나와 published/hint 검증용 공개 키·ID·공개 상태를 하나의 묶음으로 영속 저장하고, 재시작 후 동일하게 복원한다. 중복 `kid`, 키 누락, 복원 실패를 검증한다. 과거 개인 키는 공개 키 보존에 필요하지 않다. | 검증되지 않은 키 상태로 발급을 시작하지 않는다. 정상 기존 발급자를 유지하고 새 배포를 중단한다. |
-| 새 공개 키 사전 배포 | 아직 구 키로만 서명하면서 JWKS에 구·신 공개 키를 함께 제공한다. 모든 JWKS 응답 경로와 발급자에서 이 상태를 확인하고, 소비자별 새 `kid` 검증 및 캐시 갱신 동작을 확인한다. 사전 공개는 현재 보조 함수 외에 운영 연결과 전환 상태 구현이 필요하다. | 소비자의 새 키 수용이 확인되지 않으면 서명 키를 전환하지 않는다. |
+| 새 공개 키 사전 배포 | 아직 구 키로만 서명하면서 묶음의 published 목록에 구·신 공개 키를 함께 둔다. 모든 JWKS 응답 경로와 발급자에서 이 상태를 확인하고, 소비자별 새 `kid` 검증 및 캐시 갱신 동작을 확인한다. | 소비자의 새 키 수용이 확인되지 않으면 서명 키를 전환하지 않는다. |
 | 신규 서명 전환 | 사전 공개 게이트를 통과한 뒤 새 키로 서명한다. 구 공개 키는 유지하고, 모든 발급자의 활성 `kid`와 마지막 구 키 발급 시각을 확인한다. | 부분 배포나 서명 오류이면 전환을 중단한다. 이미 새 키로 발급된 JWT의 검증 키도 보존한다. |
 | 구 키 공개 유지 | 만료 전 토큰 수명 게이트와 소비자 검증 게이트를 충족할 때까지 구 공개 키를 일반 JWKS에 유지한다. 재시작과 롤백 후에도 유효 토큰의 검증 키와 hint 검증 이력이 유지되는지 확인한다. | 구 키 발급이 재개되면 공개 종료 일정을 다시 계산한다. |
 | 구 키 공개 종료 | 구 키 발급 중단, 토큰 수명과 소비자 검증 결과를 확인한 뒤 일반 JWKS/access 검증 목록에서 제거한다. 구 공개 키는 hint 전용 목록에 남기고, 모든 응답 경로에서 공개 상태와 신규 토큰·과거 hint 검증을 확인한다. | 정상 교체에서 종료가 너무 빨랐다면 복구 경로로 구 공개 키를 다시 제공할 수 있어야 한다. 키 유출 사고에서는 hint 목록에서도 제거하는 별도 사고 대응 정책을 따른다. |
@@ -261,8 +291,8 @@ Vault/ESO 소유권, 사전 공개·전환·공개 종료·롤백과 소비자�
 각 단계를 통과한 증거 없이 파일 교체나 배포 성공만으로 무중단을 보장하지 않는다.
 
 구체 구현 결정은 [ADR-003](../adr/003-issuer-signing-key-rotation.md)과
-[구현 설계](../architecture/issuer-signing-key-rotation.md)를 따른다. 그 설계의 새 설정·키
-묶음·hint 전용 검증은 아직 사용할 수 없다. NoteGate/OpsGate Browser의 JWKS snapshot과
+[구현 설계](../architecture/issuer-signing-key-rotation.md)를 따른다. 새 설정·키
+묶음·hint 전용 검증을 사용하더라도 NoteGate/OpsGate Browser의 JWKS snapshot과
 Cloudflare Access 등 소비자의 전환 게이트도 실제 활성화 전에 충족해야 한다.
 
 ### 향후 명령과 Google 검증 키의 구분
@@ -272,8 +302,8 @@ Cloudflare Access 등 소비자의 전환 게이트도 실제 활성화 전에 �
 
 이 절은 AuthGate가 자체 access/ID token을 발급하는 **issuer 서명 키**를 다룬다.
 Google ID token의 서명을 검증하기 위한 **upstream remote-JWKS 캐시 TTL**은 별도 정책이다.
-upstream TTL을 도입해도 자체 current/previous 키 로테이션이 생기지 않으며,
-자체 키 로테이션을 구현해도 Google 검증 키의 캐시 만료·조회 실패 정책은 달라지지 않는다.
+upstream TTL을 도입해도 자체 키 묶음의 전환이 자동으로 진행되지 않으며,
+자체 키 묶음을 사용해도 Google 검증 키의 캐시 만료·조회 실패 정책은 달라지지 않는다.
 
 ## 클라이언트 등록
 

@@ -9,6 +9,23 @@
 마이그레이션 자체는 authgate 시작 시 자동 적용된다 ([009 운영](009-operations.md) 참조).
 이 문서는 "어떤 순서로, 어떤 주의로 버전을 올리는가"를 다룬다.
 
+## 선택적인 signing-key bundle 모드
+
+bundle을 지원하는 바이너리 배포와 운영 키 활성화를 분리한다. 새 환경변수가 없으면
+기존 `SIGNING_KEY_PATH`와 `authgate-key-1` 동작을 유지하므로, 먼저 지원 버전을
+배포할 수 있다. DB migration·세션 일괄 삭제·실제 키 교체는 필요하지 않다.
+
+bundle 모드에 처음 진입할 때는 기존 개인 키와 공개 fingerprint, `authgate-key-1`을
+그대로 이관하고 nonempty `SIGNING_KEY_PATH`를 제거한다. 파일과 설정은 Secret으로
+함께 배포하며, 누락·잘못된 묶음은 서버 시작을 거부한다. 기존 서명 키를 교체하는 것과
+키 저장 형식을 이관하는 것을 한 단계로 합치지 않는다.
+
+신규 키 사전 공개·활성화는 **모든 발급자의 bundle 지원 확인 후** 진행한다.
+새 키로 발급한 뒤에는 단일 키만 제공하는 구버전 이미지나 과거 Secret을 단순 복원하지
+않는다. rollback에서도 최신 public/hint 이력과 유효한 모든 JWT 검증 키를 유지해야 한다.
+소비자 캐시 및 키 수명 게이트는 [009 운영](009-operations.md#키-로테이션)과
+[구현 설계](../architecture/issuer-signing-key-rotation.md)를 따른다.
+
 ## 로그인 쿠키 전환
 
 운영(`DEV_MODE=false`)의 세션 쿠키를 `authgate_session`에서

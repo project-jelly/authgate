@@ -1,8 +1,9 @@
 # Issuer signing-key rotation implementation design
 
-> 2026-10-15 설계 결정. **미구현**이며 현재 실행할 운영 명령이나 완료된 테스트가 아니다.
-> 정책은 [ADR-003](../adr/003-issuer-signing-key-rotation.md), 현재 런타임은
-> [Operations](../spec/009-operations.md#키-로테이션)을 따른다.
+> 2026-10-15 설계 결정과 선택적인 키 묶음 구현. **운영 키 이관·전환은 별도 단계**다.
+> 정책은 [ADR-003](../adr/003-issuer-signing-key-rotation.md), 설정·파일 계약은
+> [Operations](../spec/009-operations.md#키-로테이션), 구현 검증 범위는
+> [Tests](../tests/README.md)를 따른다.
 
 ## 확인한 책임 경계
 
@@ -27,10 +28,12 @@ JWKS 및 자체 access 검증에는 `Storage.KeySet`을 사용한다. hint verif
 
 ## 묶음 형식과 시작 검증
 
-추가할 설정은 `SIGNING_KEY_BUNDLE_PATH`다. 설정이 없으면 기존
+키 묶음 설정은 `SIGNING_KEY_BUNDLE_PATH`다. 설정이 없으면 기존
 `SIGNING_KEY_PATH` 동작을 유지한다. bundle path와 **명시적으로 설정한** legacy
 path가 함께 있으면 구성 오류다. legacy path의 기본값은 bundle 모드에 적용하지 않는다.
 bundle 모드에서는 파일 누락·파싱 오류에 대해 새 키를 생성하거나 legacy로 폴백하지 않는다.
+빈 환경변수는 미설정처럼 처리한다. nonempty 값이 공백으로만 되어 있으면 구성 오류이며,
+실제 파일 경로의 앞뒤 공백은 임의로 제거하지 않는다.
 
 하나의 UTF-8 JSON 파일에 아래 필드를 둔다. 이 표는 형식 정의이며 실제 키 예제가 아니다.
 
@@ -79,7 +82,7 @@ serializer가 private 필드를 알아서 제거한다고 가정하면 안 된�
 
 기존 패키지 경계를 유지한다. 범용 키 관리 서비스·DB 테이블·회전 scheduler는 추가하지 않는다.
 
-| 위치 | 구현할 변경 |
+| 위치 | 구현 책임 |
 |------|-------------|
 | `config` | 경로 선택 및 상충 설정 검사 |
 | `storage/keys.go` 또는 같은 패키지의 bundle 파일 | 제한 있는 단일 읽기, 엄격한 JSON/PEM/JWK 검증 |
@@ -210,11 +213,11 @@ JWT 가능성을 JWKS 삭제만으로 없앴다고 보고하지 않는다. 정�
 실패할 수 있으며 이는 사고 대응에서 수용할 호환성 손실이다. 관련 세션/grant 조치는
 기존 token/session 경계에 따라 별도로 판단한다.
 
-## 구현 및 검증 순서
+## 구현 및 운영 검증 순서
 
-1. bundle parser/provider/config와 hint key set을 구현한다. 기존 legacy 모드와 JWT
-   alg·claims·`typ=at+jwt`·`at_hash`·refresh/session 계약을 보존한다. 같은 PR에서
-   Operations 환경변수·이관 설명과 테스트 문서를 실제 구현에 맞춘다.
+1. 코드의 bundle parser/provider/config와 hint key set은 기존 legacy 모드 및 JWT
+   alg·claims·`typ=at+jwt`·`at_hash`·refresh/session 계약을 보존한다.
+   Operations 환경변수·이관 설명과 테스트 문서를 구현과 함께 관리한다.
 2. GitHub Actions에서 parser 거부 사례, private key 미노출, 3개 이상 공개 키,
    같은 묶음의 재시작 복원, 두 독립 프로세스 A/B 혼합 상태를 검증한다. Browser·Device·
    MCP·refresh와 UserInfo/introspection, expired hint authorize/logout를 실제 HTTP로

@@ -345,6 +345,13 @@ OIDC RP-Initiated Logout 1.0 §2의 `/end_session` 엔드포인트와 RFC 7009�
 
 이 분리는 RFC/OIDC 사양을 따른 것이며 의도적이다. 운영상 "전부 무효화"가 필요하면 admin 도구를 별도로 배포한다.
 
+선택적인 signing-key bundle 모드에서는 일반 JWKS/access 검증에서 공개 종료한 키를
+hint 전용 공개 키 목록에 남길 수 있다. 이 경우 만료된 `id_token_hint`의 기존 허용 동작은
+유지되며, hint 검증은 정확한 nonempty `kid`와 단일 RS256 서명을 요구한다. 공개 종료는
+access 검증 신뢰를 끝내는 것이고, hint 신뢰까지 철회하려면 묶음에서 해당 공개 키를
+완전히 제거해야 한다. 세션 소유자 확인·CSRF·logout 확인 절차는 동일하다.
+모드 선택과 안전한 공개 종료 조건은 [009 키 로테이션](009-operations.md#키-로테이션)을 따른다.
+
 ## 토큰 저장 보안
 
 | 환경 | access_token | refresh_token |
