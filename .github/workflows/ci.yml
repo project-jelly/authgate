@@ -261,3 +261,11 @@ jobs:
           # Test and integration dependencies execute in CI and are part of the
           # repository's supply chain, so scan them together with runtime code.
           govulncheck ./...
+          # Nested modules are not included in the root ./... pattern.
+          for module in examples/cli examples/mcp-server examples/webapp; do
+            (
+              cd "$module"
+              go test ./...
+              govulncheck ./...
+            )
+          done

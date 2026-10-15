@@ -45,6 +45,8 @@
 빌드·단위/통합 테스트·race·포맷·vet·lint·SQLC·취약점 검사는 CI에서 실행하고,
 실패한 job의 로그를 확인한 뒤 수정 커밋으로 다시 검증한다.
 명시적인 로컬 재현 요청이 없으면 CI용 검사를 로컬에서 반복하거나 도구를 설치하지 않는다.
+`Vulnerability Check`는 루트 모듈 검사 뒤 예제 3개 모듈의 테스트와
+`govulncheck ./...`도 각 모듈 디렉토리에서 실행한다.
 
 `cmd/authgate/healthcheck_test.go`는 healthcheck 명령의 HTTP 200 성공,
 오류 응답·리디렉션·잘못된 포트·연결 실패·취소 처리를 검증한다.
@@ -67,8 +69,11 @@ PostgreSQL 잠금으로 인증 코드 동시 소비(최대 1회), 잘못된 요�
 
 `.github/scripts/test_release_policy.py`는 CI 출처·결과·커밋 검증, 안정 버전 형식,
 미발행/완료/부분 실패 릴리스 처리, immutable digest 승격과 Trivy 보고서의
-취약점·secret 실패 조건을 검증한다. `test_release_provenance.py`는 소스 SHA와
-워크플로 SHA의 분리, 서명 검증된 predicate의 소스·CI·빌드 실행 일치를 검증한다.
+취약점·secret 실패 조건을 검증한다.
+주간 govulncheck의 실제 workflow 명령도 실행해 정상/실패 종료 코드가 `tee`를 거쳐
+유지되고 두 경우 모두 보고서가 저장되는지 확인한다.
+`test_release_provenance.py`는 소스 SHA와 워크플로 SHA의 분리,
+서명 검증된 predicate의 소스·CI·빌드 실행 일치를 검증한다.
 custom release-evidence의 이벤트·호스팅 runner 조건과 SLSA build type 미주장도 검사한다.
 실제 `gh attestation verify` 출력 구조에 합성 custom evidence를 넣은 fixture로 `predicate_type`을
 검증하고, `predicateType` 호환 및 두 필드의 충돌 거부도 확인한다.
