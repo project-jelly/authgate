@@ -17,6 +17,21 @@ Browser / Device / MCP / Refresh / Logout / Delete 각 채널이 공통 상태�
 | `browser-004b` | `deleted` | Browser 로그인 | Spec 001 신규 가입 서브플로우 진입 | 재가입 경로 |
 | `browser-005` | `pending_deletion`, 복구 후 auth_request 완료 상태 반영 실패 | Browser 재로그인 | 다음 재시도에서 정상 완료 | 복구 후 재시도 멱등성 |
 
+### authorize PKCE 메서드 (Browser / MCP)
+
+`internal/integration/integration_pkce_enforcement_test.go`의
+`TestAuthorizePKCEMethodValidation`은 실제 HTTP와 PostgreSQL을 사용해 아래 매트릭스를
+확인한다. 허용 요청은 채널별 로그인 redirect와 저장된 challenge/method를 확인하고,
+거부 요청은 callback의 `invalid_request`·state·iss와 해당 auth_request 0건을 확인한다.
+
+| 초기 상태 | 입력 | 기대 결과 | 검증 포인트 |
+|-----------|------|-----------|-------------|
+| public Browser / MCP | challenge + `S256` | 로그인 경로로 이동, 요청 1건 저장 | 기존 S256 요구 유지 |
+| public Browser / MCP | PKCE 없음, plain·메서드 생략, `S512`·`s256`·`PLAIN`, challenge 없는 method | `invalid_request`, 요청 저장 안 함 | 면제 없는 클라이언트는 S256 필수 |
+| `skip_pkce: true` confidential Browser | PKCE 없음, challenge + `S256`·`plain`·메서드 생략 | 로그인 경로로 이동, 요청 1건 저장 | Gitea 및 명시적/암묵적 plain 호환 |
+| `skip_pkce: true` confidential Browser | challenge + `S512`·`s256`·`PLAIN` | `invalid_request`, 요청 저장 안 함 | 알 수 없는 method를 plain으로 해석하지 않음 |
+| `skip_pkce: true` confidential Browser | challenge 없이 method `S256`·`S512`만 전달 | 로그인 경로로 이동, 요청 1건 저장 | 기존 면제 동작 유지, PKCE 없음 |
+
 ### prompt 파라미터 (Browser / MCP 공통)
 
 | ID | 초기 상태 | 입력 | 기대 결과 | 검증 포인트 |

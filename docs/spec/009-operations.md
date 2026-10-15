@@ -301,6 +301,10 @@ Gitea 는 `markbates/goth` 의 openidConnect 프로바이더를 쓰는데 `code_
 - **`login_channel: mcp`**: PKCE S256 이 MCP 채널 계약의 일부다 ([Spec 004](004-mcp-login.md)). CIMD 로 등록되는 클라이언트는 전부 public 이라 이미 제외되지만, YAML 로 선언한 confidential mcp 클라이언트가 유일하게 빠져나갈 수 있는 경로였다.
 
 이 옵션은 채널 정책을 완화하는 수단이 아니라, PKCE 를 **구현하지 못하는** 라이브러리를 위한 탈출구다.
+면제 클라이언트도 challenge를 전달하면 method는 `S256`, `plain`, 생략(암묵적 `plain`)만
+허용된다. 다른 method는 `invalid_request`로 거부되며 DB에 저장되지 않는다.
+challenge를 보내지 않는 Gitea 연동은 그대로 허용한다. challenge 없이 method만 보낸
+면제 요청도 기존처럼 허용하지만 PKCE를 적용한 요청으로 취급하지 않는다.
 
 ### 클라이언트 접근 정책 (`access`)
 

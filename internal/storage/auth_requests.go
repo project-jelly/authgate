@@ -34,6 +34,19 @@ func (s *Storage) CreateAuthRequest(ctx context.Context, req *oidc.AuthRequest, 
 			return nil, err
 		}
 	}
+	// Opting out of mandatory S256 does not make unknown methods valid.
+	// zitadel treats every non-S256 method as plain at code exchange, so reject
+	// unsupported submitted methods before persisting a challenge. An omitted
+	// method keeps RFC 7636's implicit plain behavior for opted-out clients.
+	if req.CodeChallenge != "" {
+		switch req.CodeChallengeMethod {
+		case "", oidc.CodeChallengeMethodPlain, oidc.CodeChallengeMethodS256:
+		default:
+			err := oidc.ErrInvalidRequest()
+			err.Description = "unsupported code_challenge_method"
+			return nil, err
+		}
+	}
 
 	ar := &AuthRequestModel{
 		ID:                  s.idgen.NewUUID(),
