@@ -485,6 +485,16 @@ attestation을 검증한 뒤 승격해야 한다.
 Dependabot은 매주 월요일 `Asia/Seoul` 기준으로 업데이트를 제안한다.
 기존 7일 cooldown, Dependency Review, govulncheck, CodeQL 설정은 유지한다.
 
+Go 모듈과 Docker builder는 보안 패치 버전 `1.26.9`를 사용한다. CI의
+`Vulnerability Check`는 루트 모듈과 별도 모듈인 `examples/cli`,
+`examples/mcp-server`, `examples/webapp`을 각각 검사하고 예제 테스트도 실행한다.
+`go-jose v4.1.6`부터 RSA JWK의 modulus는 최대 4096비트다. 상위 IdP의 JWKS와
+수동으로 제공하는 서명 키를 교체할 때 이 제한과의 호환성을 확인한다.
+
+주간 및 수동 `Vulnerability Full Scan`은 `govulncheck ./...`의 종료 코드를
+`pipefail`로 유지한다. 취약점 발견이나 스캐너 오류는 실행 실패로 처리하며,
+실패한 경우에도 전체 보고서 업로드와 결과 요약을 시도한다.
+
 Release는 이 리포의 성공한 main push CI만 받아 정확한 커밋을 빌드한다.
 이미 발행된 `VERSION`은 건너뛰며, 오래된 CI는 건너뛴 뒤 다음 main CI가
 미발행 버전을 확인한다. 검사 도중 main이 바뀌면 승격을 중단한다.

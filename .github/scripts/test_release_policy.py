@@ -1,4 +1,9 @@
 import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import textwrap
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -114,6 +119,23 @@ class ReleasePolicy(unittest.TestCase):
 
 
 class ScanPolicy(unittest.TestCase):
+    def test_full_scan_pipeline_preserves_scanner_exit_status(self):
+        workflow = Path(__file__).resolve().parents[1] / "workflows/vuln-full-scan.yml"
+        step = workflow.read_text().split("        id: vulnscan\n", 1)[1].split("\n      - name:", 1)[0]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        for status in [0, 3]:
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                scanner = Path(directory) / "govulncheck"
+                scanner.write_text(f"#!/bin/sh\nprintf 'scan report\\n' >&2\nexit {status}\n")
+                scanner.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-e", "-c", script], cwd=directory,
+                    env={**os.environ, "PATH": directory + os.pathsep + os.environ["PATH"]},
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertEqual((Path(directory) / "govulncheck-full.txt").read_text(), "scan report\n")
+
     def test_clean_and_low_findings(self):
         check({"SchemaVersion": 2, "Results": []})
         check({"SchemaVersion": 2, "Results": [{"Vulnerabilities": [{"Severity": "LOW"}]}]})
