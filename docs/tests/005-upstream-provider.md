@@ -66,7 +66,7 @@ OIDCProvider
   └─ NewOIDCProvider(fakeServer.URL, ..., WithRPOptions(rp.WithHTTPClient(...)))
 ```
 
-테스트 파일 위치: `internal/upstream/oidc_test.go`
+테스트 파일 위치: `internal/upstream/oidc_test.go`, `internal/upstream/oidc_cookie_test.go`
 빌드 태그: 불필요 (외부 의존 없음, `httptest.Server`만 사용)
 
 ### fake OIDC IdP 요구사항
@@ -126,6 +126,19 @@ rp 라이브러리가 ID token을 검증하므로, fake IdP는:
 |----|----------|------|----------|-------------|
 | `oidc-e2e-001` | 정상 전체 경로 | fake IdP 전체 구성 | Discovery → AuthURL → Exchange → UserInfo 반환 | 3단계 통합 |
 | `oidc-e2e-002` | 다른 redirectURI로 여러 Provider | browser/mcp/device 각각 | 각 Provider의 redirectURI가 AuthURL에 포함 | main.go의 3개 Provider 패턴 검증 |
+
+### 호스트 전용 nonce 쿠키
+
+| ID | 시나리오 | 입력 | 기대 결과 | 검증 포인트 |
+|----|----------|------|----------|-------------|
+| `oidc-cookie-001` | Browser / Device / MCP × 운영 / dev 정상 왕복 | 발급한 state·PKCE·nonce 쿠키와 일치하는 id_token | 성공 콜백, token endpoint 1회 | 운영 `__Host-authgate_nonce` / dev `nonce`; Secure·HttpOnly·Lax·Path=/·Domain 없음; 같은 속성으로 삭제 |
+| `oidc-cookie-002` | 운영 콜백의 예상 nonce 쿠키가 무효 | 누락 / 변조 / 인증된 빈 값 / 기존 이름만 / 기존 이름으로 서명한 값을 새 이름으로 복사 | 일반 메시지 401, 성공 콜백 없음, token endpoint 0회 | 코드 교환 전 가드, 쿠키 이름의 서명 바인딩, 실패 시에도 예상 쿠키 삭제 |
+| `oidc-cookie-003` | 유효한 호스트 쿠키 앞에 기존 이름 주입 | 올바르게 서명한 기존 이름의 다른 nonce + 호스트 쿠키 | 정상 왕복 | 운영의 기존 이름 폴백·쿠키 순서 의존 없음 |
+| `oidc-cookie-004` | nonce 쿠키 인코딩 실패 | hash key 없는 cookie handler | 500, Location·Set-Cookie 없음 | 보호 없이 upstream 로그인 시작 금지 |
+| `oidc-nonce-001` | id_token nonce 불일치 | 쿠키는 정상, token response nonce만 다름 | 교환 후 401, 성공 콜백 없음 | 반환된 nonce 검증을 위해 token endpoint는 1회 호출됨 |
+
+nonce 생성 오류도 500으로 중단한다. 라이브러리의 기존 nonce 비교를 제거하거나 빈 값 비교를
+건너뛰지 않으며, 쿠키 가드는 그 비교보다 먼저 수행한다. 상태·PKCE 핸들러를 재구현하지 않는다.
 
 ## 기존 테스트와의 관계
 

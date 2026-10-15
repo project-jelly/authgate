@@ -62,7 +62,7 @@ func TestCallbackResponse_SessionCookieOnlyOnSuccess(t *testing.T) {
 				if len(cookies) != 0 {
 					t.Fatal("response unexpectedly established a session")
 				}
-			} else if len(cookies) != 1 || cookies[0].Value != "session-1" || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
+			} else if len(cookies) != 1 || cookies[0].Name != "__Host-authgate_session" || cookies[0].Path != "/" || cookies[0].Domain != "" || cookies[0].Value != "session-1" || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
 				t.Fatalf("incorrect production session cookie: %+v", cookies)
 			}
 			if tc.result.Action == service.ActionError && (!strings.Contains(w.Body.String(), "account_inactive") || w.Header().Get("Content-Type") != "text/html; charset=utf-8") {

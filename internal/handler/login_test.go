@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"github.com/kangheeyong/authgate/internal/pages"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/kangheeyong/authgate/internal/pages"
 	"github.com/kangheeyong/authgate/internal/service"
 	"github.com/kangheeyong/authgate/internal/upstream"
 )
@@ -83,11 +83,26 @@ func TestSetSessionCookie_SecureDependsOnDevMode(t *testing.T) {
 	})
 }
 
-func TestGetSessionCookie(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "abc123"})
-
-	if got := getSessionCookie(req); got != "abc123" {
-		t.Fatalf("cookie value = %q, want abc123", got)
+func TestGetSessionCookie_UsesOnlyTheConfiguredName(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		devMode bool
+		cookies []*http.Cookie
+		want    string
+	}{
+		{name: "production ignores legacy", cookies: []*http.Cookie{{Name: "authgate_session", Value: "injected"}}},
+		{name: "production ignores legacy ordered first", cookies: []*http.Cookie{{Name: "authgate_session", Value: "injected"}, {Name: "__Host-authgate_session", Value: "real"}}, want: "real"},
+		{name: "development reads legacy", devMode: true, cookies: []*http.Cookie{{Name: "authgate_session", Value: "dev"}}, want: "dev"},
+		{name: "development ignores production", devMode: true, cookies: []*http.Cookie{{Name: "__Host-authgate_session", Value: "prod"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/login", nil)
+			for _, cookie := range tt.cookies {
+				req.AddCookie(cookie)
+			}
+			if got := getSessionCookie(req, tt.devMode); got != tt.want {
+				t.Fatalf("cookie value = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

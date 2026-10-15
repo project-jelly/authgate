@@ -30,7 +30,7 @@ func NewDeviceHandler(deviceService *service.DeviceService, provider upstream.Pr
 // HandleDevicePage handles GET /device and GET /device?user_code=XXXX
 func (h *DeviceHandler) HandleDevicePage(w http.ResponseWriter, r *http.Request) {
 	userCode := r.URL.Query().Get("user_code")
-	sessionID := getSessionCookie(r)
+	sessionID := getSessionCookie(r, h.devMode)
 
 	result := h.deviceService.HandleDevicePage(r.Context(), userCode, sessionID)
 
@@ -115,7 +115,7 @@ func (h *DeviceHandler) HandleDeviceApprove(w http.ResponseWriter, r *http.Reque
 
 	userCode := r.FormValue("user_code")
 	action := r.FormValue("action")
-	sessionID := getSessionCookie(r)
+	sessionID := getSessionCookie(r, h.devMode)
 	info := clientinfo.FromContext(r.Context())
 
 	result := h.deviceService.HandleDeviceApprove(r.Context(), userCode, action, sessionID, info.IP, info.UserAgent)

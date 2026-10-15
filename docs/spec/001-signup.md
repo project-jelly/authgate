@@ -79,7 +79,7 @@ sequenceDiagram
 
     Note over U,DB: 4. 세션 생성 + 상위 플로우 복귀
     AG->>DB: INSERT sessions
-    AG->>AG: Set-Cookie (authgate_session)
+    AG->>AG: Set-Cookie (__Host-authgate_session, dev: authgate_session)
     AG->>AG: auth_request에 subject 연결 + 로그인 완료 상태 반영 → 브라우저 로그인 플로우로 복귀
     Note over U,DB: → Spec 002 브라우저 로그인의 토큰 발급 단계로 이어짐
 ```

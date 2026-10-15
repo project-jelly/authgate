@@ -90,7 +90,7 @@ func (h *LogoutHandler) HandleEndSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	hasSessionCookie := getSessionCookie(r) != ""
+	hasSessionCookie := getSessionCookie(r, h.devMode) != ""
 	browserUserID, lookupErr := h.browserUserID(ctx, r)
 	if lookupErr != nil {
 		// The cookie cannot be resolved (e.g. the database is unavailable).
@@ -139,7 +139,7 @@ func (h *LogoutHandler) HandleEndSession(w http.ResponseWriter, r *http.Request)
 // browserUserID returns the user signed in to this browser, or "" when there
 // is no live session. A closed account still has a session worth ending.
 func (h *LogoutHandler) browserUserID(ctx context.Context, r *http.Request) (string, error) {
-	sessionID := getSessionCookie(r)
+	sessionID := getSessionCookie(r, h.devMode)
 	if sessionID == "" {
 		return "", nil
 	}

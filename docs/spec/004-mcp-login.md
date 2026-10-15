@@ -625,6 +625,8 @@ code exchange가 끝나면 auth_request와 함께 정리된다.
 
 ## 보안 요구사항
 
+- 세션과 upstream nonce는 [Spec 002의 호스트 전용 쿠키 규칙](002-browser-login.md#보안-요구사항)을 공유한다. 운영은 `__Host-authgate_session` / `__Host-authgate_nonce`만 읽고, nonce 쿠키 누락·변조·빈 값은 코드 교환 전에 401로 거부한다. `DEV_MODE=true`의 기존 이름은 유지한다.
+
 - PKCE `S256` 필수
 - public client 기본 (`token_endpoint_auth_method = none`)
 - CIMD redirect_uri는 메타데이터 문서의 redirect_uris와 정확히 일치해야 함

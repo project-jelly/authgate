@@ -86,6 +86,8 @@ custom release-evidence의 이벤트·호스팅 runner 조건과 SLSA build type
 - `internal/handler/login_response_test.go`: upstream state/prompt 전달,
   성공한 callback에서만 세션 쿠키 발급, production 쿠키 속성,
   오류 redirect/HTML 응답 및 미지원 action의 채널별 처리 경계.
+- `internal/handler/session_cookie_test.go`, `login_test.go`, `logout_test.go`: 운영 / dev 세션 이름·속성·삭제 일치, 기존 이름과 쿠키 순서를 무시하는 조회 및 실제 logout handler의 폴백 금지.
+- `internal/upstream/oidc_cookie_test.go`: Browser / Device / MCP의 운영 / dev nonce 쿠키와 전체 HTTP 왕복, 기존 이름 주입·변조·빈 값의 코드 교환 전 거부, nonce 쿠키 발급 오류의 리다이렉트 중단. 기존 `oidc_test.go`는 token 응답의 nonce 불일치 거부를 유지한다.
 - `internal/service/login_request_test.go`: Browser/MCP 양쪽의 인증 요청 조회 오류,
   특히 login entry(400)와 callback(500)의 기존 만료 응답 차이 유지.
 - 기존 `max_age_unit_test.go`, `login_unit_test.go`, `client_access_unit_test.go`와
