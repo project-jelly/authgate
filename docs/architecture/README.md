@@ -5,9 +5,12 @@ boundaries are deliberately small; the application does not need another
 framework or a generic workflow engine.
 
 The [issuer signing-key rotation design](issuer-signing-key-rotation.md) records
-the next implementation under [ADR-003](../adr/003-issuer-signing-key-rotation.md).
-It is not implemented runtime behavior; the current single-key startup path
-remains documented in [Operations](../spec/009-operations.md#키-로테이션).
+the optional startup-loaded key bundle under [ADR-003](../adr/003-issuer-signing-key-rotation.md).
+`storage` validates the bundle and owns one active private key plus public-only
+verification sets; `app` selects the mode and wires a separate ID-token-hint key
+set. The bundle remains fixed until process exit. The legacy single-key mode,
+bundle contract and remaining deployment gates are documented in
+[Operations](../spec/009-operations.md#키-로테이션).
 
 ## Package responsibilities
 

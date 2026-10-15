@@ -64,6 +64,26 @@ challenge가 있는 알 수 없는 method(`S512`, `s256`, `PLAIN`)는 `invalid_r
 저장 0건을 확인하고, 면제 클라이언트의 PKCE 없음·명시적/암묵적 plain·method만 있는
 기존 요청은 채널별 로그인 redirect와 저장 값으로 확인한다.
 
+`internal/storage/signing_key_bundle_test.go`는 bounded strict JSON/PEM/RSA/JWK 검증,
+중복 ID·키 재료, active 일치, 공개 키 전용 반환과 hint 서명 경계를 검증한다.
+`internal/config/config_test.go`는 bundle/legacy 경로 선택과 상충·공백 설정 거부를 확인한다.
+`internal/app/signing_key_bundle_test.go`는 실제 production wiring의 legacy 유지,
+bundle 오류 시 폴백 금지, private 재료 없는 시작 로그, 용량 경고 및 provider의
+hint key set·RS256 연결을 검증한다.
+
+`internal/integration/integration_signing_key_bundle_test.go`는 실제 파일을 로드한
+HTTP provider와 PostgreSQL DB 하나로 다음을 검증한다.
+
+- Browser·Device·MCP·refresh 응답의 서명·`kid`·`typ`·`at_hash`, MCP resource audience.
+- 3개 공개 키를 제공하는 JWKS에 private RSA 필드와 hint 전용 키가 없는지 확인.
+- 같은 issuer·DB를 공유하는 별도 provider 인스턴스의 재시작 복원과 구·신 토큰의
+  양방향 UserInfo 검증. 파일 덮어쓰기 후 기존 인스턴스의 active 키 불변성.
+- 구 키 공개 종료 후 access 거부와 expired hint의 authorize/logout 수용,
+  두 목록에서 완전히 제거한 뒤 양쪽 hint 진입점 거부.
+
+HTTP 테스트의 공개 종료는 권한 분리를 검증하기 위한 통제된 전환이다. 운영 토큰 수명이나
+소비자 캐시의 대기·관측 게이트를 대신하지 않는다. 실제 운영 키는 사용하지 않는다.
+
 ```text
 문서 = 테스트 설계
 코드 = internal/*_test.go

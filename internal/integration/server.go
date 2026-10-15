@@ -59,6 +59,14 @@ func SetupTestServer(t *testing.T) *TestServer {
 type SetupOptions struct {
 	EnableMCP                bool
 	IDTokenUserinfoAssertion bool
+	// SigningKeyBundlePath loads the same persisted key format as production.
+	// Empty keeps the legacy single-key setup used by the existing suite.
+	SigningKeyBundlePath string
+	// SharedDB and IssuerURL model distinct issuer processes during a rollout.
+	// The first server owns database cleanup; each server keeps its own URL
+	// for direct requests and registered relying-party redirects.
+	SharedDB  *sql.DB
+	IssuerURL string
 	// RefreshReuseGrace mirrors REFRESH_TOKEN_REUSE_GRACE_SEC. Zero keeps the
 	// strict reuse detection the rest of the suite asserts.
 	RefreshReuseGrace time.Duration
@@ -104,7 +112,10 @@ func setupCryptoKeys(t *testing.T, store *storage.Storage) {
 func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 	t.Helper()
 
-	db := testutil.SetupPostgres(t)
+	db := opts.SharedDB
+	if db == nil {
+		db = testutil.SetupPostgres(t)
+	}
 	clk := &clock.FixedClock{T: time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC)}
 	gen := idgen.CryptoGenerator{}
 
@@ -132,18 +143,29 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		store.SetResourceBindingPolicy(mcpadapter.NewResourceBindingPolicy(storage.NewCoreResourceBindingPolicy(), clientPolicy))
 	}
 
-	// Generate signing key
-	key, err := storage.LoadOrGenerateKey(t.TempDir() + "/signing_key.pem")
-	if err != nil {
-		t.Fatalf("signing key: %v", err)
+	if opts.SigningKeyBundlePath != "" {
+		bundle, err := storage.LoadSigningKeyBundle(opts.SigningKeyBundlePath)
+		if err != nil {
+			t.Fatalf("signing key bundle: %v", err)
+		}
+		store.SetSigningKeyBundle(bundle)
+	} else {
+		key, err := storage.LoadOrGenerateKey(t.TempDir() + "/signing_key.pem")
+		if err != nil {
+			t.Fatalf("signing key: %v", err)
+		}
+		store.SetSigningKey(key, "test-key-1")
 	}
-	store.SetSigningKey(key, "test-key-1")
 
 	// We need to create the server first to know the URL, then set the issuer.
 	// Use a 2-pass approach: create mux, wrap in httptest, then set issuer.
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
+	issuer := srv.URL
+	if opts.IssuerURL != "" {
+		issuer = opts.IssuerURL
+	}
 
 	// Register test clients in memory
 	store.LoadClients([]storage.ClientConfigEntry{
@@ -213,12 +235,19 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		},
 	}
 
-	provider, err := op.NewProvider(opConfig, store, op.StaticIssuer(srv.URL),
+	providerOpts := []op.Option{
 		op.WithAllowInsecure(),
 		op.WithCustomTokenEndpoint(op.NewEndpoint("oauth/token")),
 		op.WithCustomRevocationEndpoint(op.NewEndpoint("oauth/revoke")),
 		op.WithCustomDeviceAuthorizationEndpoint(op.NewEndpoint("oauth/device/authorize")),
-	)
+	}
+	if hintKeys := store.IDTokenHintKeySet(); hintKeys != nil {
+		providerOpts = append(providerOpts,
+			op.WithIDTokenHintKeySet(hintKeys),
+			op.WithIDTokenHintVerifierOpts(op.WithSupportedIDTokenHintSigningAlgorithms("RS256")),
+		)
+	}
+	provider, err := op.NewProvider(opConfig, store, op.StaticIssuer(issuer), providerOpts...)
 	if err != nil {
 		t.Fatalf("oidc provider: %v", err)
 	}
@@ -229,8 +258,8 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 	}
 
 	// Services
-	loginSvc := service.NewLoginService(store, fakeProvider.Name(), srv.URL, 24*time.Hour)
-	deviceSvc := service.NewDeviceService(store, fakeProvider.Name(), srv.URL, 24*time.Hour, clk)
+	loginSvc := service.NewLoginService(store, fakeProvider.Name(), issuer, 24*time.Hour)
+	deviceSvc := service.NewDeviceService(store, fakeProvider.Name(), issuer, 24*time.Hour, clk)
 
 	// Handlers
 	loginHandler := handler.NewLoginHandler(loginSvc, fakeProvider, true, pages.Brand{Name: "authgate"})
@@ -238,14 +267,14 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 	logoutHandler := handler.NewLogoutHandler(provider, store, true, pages.Brand{Name: "authgate"})
 	var mcpLoginHandler *handler.MCPLoginHandler
 	if opts.EnableMCP {
-		mcpLoginSvc := service.NewMCPLoginService(store, fakeProvider.Name(), srv.URL, 24*time.Hour)
+		mcpLoginSvc := service.NewMCPLoginService(store, fakeProvider.Name(), issuer, 24*time.Hour)
 		mcpLoginHandler = handler.NewMCPLoginHandler(mcpLoginSvc, fakeProvider, true, pages.Brand{Name: "authgate"})
 	}
 
 	// Routes
 	mux.HandleFunc("/.well-known/oauth-authorization-server", func(w http.ResponseWriter, r *http.Request) {
 		metadata := map[string]any{
-			"issuer":                           srv.URL,
+			"issuer":                           issuer,
 			"authorization_endpoint":           srv.URL + "/authorize",
 			"token_endpoint":                   srv.URL + "/oauth/token",
 			"revocation_endpoint":              srv.URL + "/oauth/revoke",
@@ -279,8 +308,8 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		}
 		provider.ServeHTTP(w, r.WithContext(storage.WithResource(r.Context(), resource)))
 	})
-	mux.Handle("/authorize", middleware.AuthorizationResponseIssuer(srv.URL, authorize))
-	mux.Handle("/authorize/callback", middleware.AuthorizationResponseIssuer(srv.URL, provider))
+	mux.Handle("/authorize", middleware.AuthorizationResponseIssuer(issuer, authorize))
+	mux.Handle("/authorize/callback", middleware.AuthorizationResponseIssuer(issuer, provider))
 	tokenRateLimiter := middleware.NewRateLimiter(rate.Limit(5), 5)
 	tokenWithAtJWT := storage.WrapAccessTokenJWTType(provider, store)
 	mux.Handle("/oauth/token", tokenRateLimiter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -307,7 +336,7 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		}
 		provider.ServeHTTP(w, r)
 	}))
-	mux.Handle("/", storage.WrapVerifiedAccessToken(provider, srv.URL))
+	mux.Handle("/", storage.WrapVerifiedAccessToken(provider, issuer))
 	mux.HandleFunc("/login", loginHandler.HandleLogin)
 	mux.HandleFunc("/login/callback", loginHandler.HandleCallback)
 	if opts.EnableMCP {

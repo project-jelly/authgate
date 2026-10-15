@@ -14,16 +14,27 @@ import (
 )
 
 func mustBuildOIDCProvider(cfg *config.Config, store *storage.Storage) *op.Provider {
-	provider, err := op.NewProvider(
-		buildOPConfig(cfg),
-		store,
-		op.StaticIssuer(cfg.PublicURL),
-		buildOPOptions(cfg)...,
-	)
+	provider, err := buildOIDCProvider(cfg, store)
 	if err != nil {
 		log.Fatalf("oidc provider: %v", err)
 	}
 	return provider
+}
+
+func buildOIDCProvider(cfg *config.Config, store *storage.Storage) (*op.Provider, error) {
+	opts := buildOPOptions(cfg)
+	if hintKeys := store.IDTokenHintKeySet(); hintKeys != nil {
+		opts = append(opts,
+			op.WithIDTokenHintKeySet(hintKeys),
+			op.WithIDTokenHintVerifierOpts(op.WithSupportedIDTokenHintSigningAlgorithms("RS256")),
+		)
+	}
+	return op.NewProvider(
+		buildOPConfig(cfg),
+		store,
+		op.StaticIssuer(cfg.PublicURL),
+		opts...,
+	)
 }
 
 // supportedScopes feeds the provider config and, through its discovery

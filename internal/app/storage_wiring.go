@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"strings"
 
 	mcpadapter "github.com/kangheeyong/authgate/internal/adapter/mcp"
 	"github.com/kangheeyong/authgate/internal/clock"
@@ -32,17 +33,54 @@ func mustBuildStore(cfg *config.Config, db *sql.DB, clk clock.Clock, gen idgen.C
 	store := storage.New(db, clk, gen, newStateChecker(), cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	store.SetDevicePollInterval(devicePollInterval)
 	store.SetRefreshReuseGrace(cfg.RefreshTokenReuseGrace)
-	mustConfigureSigningKey(store, cfg.SigningKeyPath)
+	mustConfigureSigningKey(cfg, store)
 	configureMCPPoliciesIfEnabled(cfg, store)
 	return store
 }
 
-func mustConfigureSigningKey(store *storage.Storage, path string) {
-	key, err := storage.LoadOrGenerateKey(path)
-	if err != nil {
+func mustConfigureSigningKey(cfg *config.Config, store *storage.Storage) {
+	if err := configureSigningKey(cfg, store); err != nil {
 		log.Fatalf("signing key: %v", err)
 	}
+}
+
+func configureSigningKey(cfg *config.Config, store *storage.Storage) error {
+	for _, path := range []struct{ name, value string }{
+		{"SIGNING_KEY_PATH", cfg.SigningKeyPath},
+		{"SIGNING_KEY_BUNDLE_PATH", cfg.SigningKeyBundlePath},
+	} {
+		if path.value != "" && strings.TrimSpace(path.value) == "" {
+			return fmt.Errorf("%s must not contain only whitespace", path.name)
+		}
+	}
+	if cfg.SigningKeyBundlePath != "" {
+		if cfg.SigningKeyPath != "" {
+			return fmt.Errorf("SIGNING_KEY_BUNDLE_PATH and SIGNING_KEY_PATH cannot both be set")
+		}
+		bundle, err := storage.LoadSigningKeyBundle(cfg.SigningKeyBundlePath)
+		if err != nil {
+			return fmt.Errorf("load signing key bundle: %w", err)
+		}
+		store.SetSigningKeyBundle(bundle)
+		slog.Info("signing key bundle loaded", "signing_keys", bundle)
+		warnSigningKeyHistory(bundle.KeyCount())
+		return nil
+	}
+	if cfg.SigningKeyPath == "" {
+		return fmt.Errorf("SIGNING_KEY_PATH is required when no signing key bundle is configured")
+	}
+	key, err := storage.LoadOrGenerateKey(cfg.SigningKeyPath)
+	if err != nil {
+		return fmt.Errorf("load signing key: %w", err)
+	}
 	store.SetSigningKey(key, "authgate-key-1")
+	return nil
+}
+
+func warnSigningKeyHistory(count int) {
+	if count >= 96 {
+		slog.Warn("signing key history nearing capacity", "key_count", count, "key_limit", 128)
+	}
 }
 
 func loadClientConfigIfPresent(cfg *config.Config, store *storage.Storage) []string {

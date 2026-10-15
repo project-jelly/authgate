@@ -10,6 +10,7 @@ import (
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/crypto"
 	"github.com/kangheeyong/authgate/internal/idgen"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 var (
@@ -126,6 +127,18 @@ func (s *Storage) SetSigningKey(key *rsa.PrivateKey, keyID string) {
 // JWKS will return both keys; JWTs are signed with the current key only.
 func (s *Storage) SetPreviousKey(key *rsa.PrivateKey, keyID string) {
 	s.signing.SetPrevious(key, keyID)
+}
+
+// SetSigningKeyBundle installs a validated immutable snapshot during startup,
+// before handlers can use the Storage. Reconfiguration requires a new process.
+func (s *Storage) SetSigningKeyBundle(bundle *SigningKeyBundle) {
+	s.signing.SetBundle(bundle)
+}
+
+// IDTokenHintKeySet returns all bundle verification keys, including keys no
+// longer published for access verification. nil preserves the legacy provider default.
+func (s *Storage) IDTokenHintKeySet() oidc.KeySet {
+	return s.signing.IDTokenHintKeySet()
 }
 
 // DB returns the underlying *sql.DB. For cross-package integration tests only

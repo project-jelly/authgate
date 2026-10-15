@@ -68,6 +68,7 @@ type Config struct {
 	ClientConfigPath     string
 	MigrationsPath       string
 	SigningKeyPath       string
+	SigningKeyBundlePath string
 	BrandName            string
 	// BrandLogoPath points at an SVG inlined into the device-flow pages. Empty
 	// renders the brand name alone, which is the neutral default.
@@ -92,6 +93,10 @@ type Config struct {
 
 func Load() (*Config, error) {
 	if err := validateParseableEnv(); err != nil {
+		return nil, err
+	}
+	signingKeyPath, signingKeyBundlePath, err := signingKeyPaths()
+	if err != nil {
 		return nil, err
 	}
 
@@ -125,7 +130,8 @@ func Load() (*Config, error) {
 		MCPCIMDHostAllowlist:      envCommaList("MCP_CIMD_HOST_ALLOWLIST"),
 		ClientConfigPath:          envDefault("CLIENT_CONFIG", "/etc/authgate/clients.yaml"),
 		MigrationsPath:            envDefault("MIGRATIONS_PATH", "/migrations"),
-		SigningKeyPath:            envDefault("SIGNING_KEY_PATH", "signing_key.pem"),
+		SigningKeyPath:            signingKeyPath,
+		SigningKeyBundlePath:      signingKeyBundlePath,
 		BrandName:                 envDefault("BRAND_NAME", "authgate"),
 		BrandLogoPath:             os.Getenv("BRAND_LOGO_PATH"),
 		BrandPrimaryColor:         os.Getenv("BRAND_PRIMARY_COLOR"),
@@ -259,6 +265,33 @@ func Load() (*Config, error) {
 	}
 
 	return c, nil
+}
+
+// An empty variable keeps the existing default behavior. A bundle suppresses
+// the implicit legacy default, but cannot silently override an explicit path.
+// Whitespace-only values are configuration errors; nonempty paths are used as
+// supplied so a path containing spaces is not changed to another file.
+func signingKeyPaths() (string, string, error) {
+	legacyPath, legacySet := os.LookupEnv("SIGNING_KEY_PATH")
+	bundlePath := os.Getenv("SIGNING_KEY_BUNDLE_PATH")
+	for _, path := range []struct{ name, value string }{
+		{"SIGNING_KEY_PATH", legacyPath},
+		{"SIGNING_KEY_BUNDLE_PATH", bundlePath},
+	} {
+		if path.value != "" && strings.TrimSpace(path.value) == "" {
+			return "", "", fmt.Errorf("%s must not contain only whitespace", path.name)
+		}
+	}
+	if bundlePath != "" {
+		if legacySet && legacyPath != "" {
+			return "", "", fmt.Errorf("SIGNING_KEY_BUNDLE_PATH and explicit SIGNING_KEY_PATH cannot both be set")
+		}
+		return "", bundlePath, nil
+	}
+	if legacyPath == "" {
+		legacyPath = "signing_key.pem"
+	}
+	return legacyPath, "", nil
 }
 
 // validateRootSecret checks that a PII root secret is valid base64 decoding to

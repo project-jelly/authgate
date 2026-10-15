@@ -19,7 +19,7 @@ func clearEnv() {
 		"DEV_MODE", "ENABLE_MCP", "MCP_CIMD_HOST_ALLOWLIST",
 		"PII_ENC_ROOT_KEY_ID", "PII_ENC_ROOT_SECRET",
 		"PII_LOOKUP_ROOT_KEY_ID", "PII_LOOKUP_ROOT_SECRET",
-		"SIGNING_KEY_PATH",
+		"SIGNING_KEY_PATH", "SIGNING_KEY_BUNDLE_PATH",
 		"DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS",
 		"DB_CONN_MAX_LIFETIME_SEC", "DB_CONN_MAX_IDLE_TIME_SEC",
 		"HTTP_READ_HEADER_TIMEOUT_SEC", "HTTP_READ_TIMEOUT_SEC",
@@ -35,6 +35,57 @@ func setMinimal() {
 	os.Setenv("SESSION_SECRET", "test-secret-32-chars-long-enough!")
 	os.Setenv("PUBLIC_URL", "http://localhost:8080")
 	os.Setenv("DEV_MODE", "true")
+}
+
+func TestLoad_SigningKeyPathSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		legacy      string
+		bundle      string
+		setLegacy   bool
+		setBundle   bool
+		wantLegacy  string
+		wantBundle  string
+		wantErrPart string
+	}{
+		{name: "unset uses legacy default", wantLegacy: "signing_key.pem"},
+		{name: "empty legacy uses default", setLegacy: true, wantLegacy: "signing_key.pem"},
+		{name: "explicit legacy", setLegacy: true, legacy: "/keys/legacy.pem", wantLegacy: "/keys/legacy.pem"},
+		{name: "empty bundle uses legacy default", setBundle: true, wantLegacy: "signing_key.pem"},
+		{name: "bundle suppresses legacy default", setBundle: true, bundle: "/keys/bundle.json", wantBundle: "/keys/bundle.json"},
+		{name: "empty legacy does not conflict", setLegacy: true, setBundle: true, bundle: "/keys/bundle.json", wantBundle: "/keys/bundle.json"},
+		{name: "explicit paths conflict", setLegacy: true, legacy: "/keys/legacy.pem", setBundle: true, bundle: "/keys/bundle.json", wantErrPart: "cannot both be set"},
+		{name: "explicit default still conflicts", setLegacy: true, legacy: "signing_key.pem", setBundle: true, bundle: "/keys/bundle.json", wantErrPart: "cannot both be set"},
+		{name: "whitespace legacy rejected", setLegacy: true, legacy: " \t", wantErrPart: "SIGNING_KEY_PATH must not contain only whitespace"},
+		{name: "whitespace legacy with bundle rejected", setLegacy: true, legacy: " \t", setBundle: true, bundle: "/keys/bundle.json", wantErrPart: "SIGNING_KEY_PATH must not contain only whitespace"},
+		{name: "whitespace bundle rejected", setBundle: true, bundle: " \n", wantErrPart: "SIGNING_KEY_BUNDLE_PATH must not contain only whitespace"},
+		{name: "nonempty paths are not trimmed", setBundle: true, bundle: " /keys/a bundle.json ", wantBundle: " /keys/a bundle.json "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clearEnv()
+			t.Cleanup(clearEnv)
+			setMinimal()
+			if tc.setLegacy {
+				t.Setenv("SIGNING_KEY_PATH", tc.legacy)
+			}
+			if tc.setBundle {
+				t.Setenv("SIGNING_KEY_BUNDLE_PATH", tc.bundle)
+			}
+			cfg, err := Load()
+			if tc.wantErrPart != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrPart) {
+					t.Fatalf("error = %v, want %q", err, tc.wantErrPart)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.SigningKeyPath != tc.wantLegacy || cfg.SigningKeyBundlePath != tc.wantBundle {
+				t.Fatalf("selected paths = %q/%q, want %q/%q", cfg.SigningKeyPath, cfg.SigningKeyBundlePath, tc.wantLegacy, tc.wantBundle)
+			}
+		})
+	}
 }
 
 func TestLoad_MissingDatabaseURL(t *testing.T) {

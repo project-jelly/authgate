@@ -154,7 +154,8 @@ go run ./cmd/authgate
 | `BRAND_PRIMARY_COLOR` | – | Accent colour for buttons and focus. Hex only; anything else refuses to start. |
 | `AUDIT_LOG_PII_RETENTION_DAYS` | `90` | Days before **end-user** activity PII (`user_id`, IP, User-Agent) is anonymized. Minimum `30`. |
 | `ADMIN_AUDIT_LOG_PII_RETENTION_DAYS` | `730` | Days before **operator action** (`admin.*`) PII is anonymized. Minimum `365`: these are the statutory access records. |
-| `SIGNING_KEY_PATH` | `signing_key.pem` | RSA signing key file path. Mount a persistent secret/volume in production. |
+| `SIGNING_KEY_PATH` | `signing_key.pem` | Legacy RSA signing key path. Mount a persistent secret/volume in production. Mutually exclusive with a nonempty bundle path when explicitly set to a nonempty value. |
+| `SIGNING_KEY_BUNDLE_PATH` | empty | Startup-loaded signing-key bundle: one active private key and separate published/hint public keys. Missing or invalid bundles refuse startup; no generation or legacy fallback. See [key rotation](docs/spec/009-operations.md#키-로테이션). |
 | `HTTP_READ_HEADER_TIMEOUT_SEC` | `5` | HTTP server `ReadHeaderTimeout` in seconds |
 | `HTTP_READ_TIMEOUT_SEC` | `15` | HTTP server `ReadTimeout` in seconds |
 | `HTTP_WRITE_TIMEOUT_SEC` | `30` | HTTP server `WriteTimeout` in seconds |

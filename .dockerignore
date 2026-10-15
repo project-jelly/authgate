@@ -3,6 +3,8 @@
 # every access_token/id_token. If it lands in a builder layer that gets
 # pushed as a cache image, the entire fleet's tokens become forgeable.
 signing_key.pem
+signing-keys*.json
+signing_key_bundle*.json
 *.pem
 *.key
 .env
