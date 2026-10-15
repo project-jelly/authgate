@@ -11,7 +11,7 @@
 |------|-----------|-----------|
 | 시작 시 키 로드 | [`app/storage_wiring.go`](../../internal/app/storage_wiring.go), [`storage/keys.go`](../../internal/storage/keys.go) | provider 생성 전에 묶음 전체를 검증한다. |
 | JWT 서명·JWKS | [`signing_key_provider.go`](../../internal/storage/signing_key_provider.go), [`storage_oidc_device.go`](../../internal/storage/storage_oidc_device.go) | 기존 `op.Storage` 인터페이스를 유지한다. |
-| access token 재서명과 ID token `at_hash` 보정 | [`access_token_typ.go`](../../internal/storage/access_token_typ.go) | 한 응답에서 키를 여러 번 조회하므로 첫 구현은 실행 중 키 교체를 하지 않는다. |
+| access token 재서명과 ID token `at_hash` 보정 | [`middleware/access_token_typ.go`](../../internal/middleware/access_token_typ.go) | provider 발급과 응답 보정이 별도로 키를 조회하므로 실행 중 키 교체를 하지 않는다. |
 | hint 검증 | zitadel `WithIDTokenHintKeySet`, authorize와 [`handler/logout.go`](../../internal/handler/logout.go) | 별도 public-only `oidc.KeySet`을 provider 생성 시 주입한다. |
 | 키 보관·배포 | Osaka Vault → ESO → Secret → read-only `subPath` mount, Reloader | 파일 watcher 대신 새 묶음으로 Pod를 교체한다. 앱에 쓰기 권한을 추가하지 않는다. |
 

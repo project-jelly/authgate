@@ -311,7 +311,7 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 	mux.Handle("/authorize", middleware.AuthorizationResponseIssuer(issuer, authorize))
 	mux.Handle("/authorize/callback", middleware.AuthorizationResponseIssuer(issuer, provider))
 	tokenRateLimiter := middleware.NewRateLimiter(rate.Limit(5), 5)
-	tokenWithAtJWT := storage.WrapAccessTokenJWTType(provider, store)
+	tokenWithAtJWT := middleware.WrapAccessTokenJWTType(provider, store)
 	mux.Handle("/oauth/token", tokenRateLimiter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resource, err := storage.ResourceFromRequestStrict(r)
 		if err != nil {
