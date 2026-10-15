@@ -180,10 +180,10 @@ Cloudflare 관리 로그인이 불가능한 현재 상태에서는 Access 측 �
 
 조사 기준은 NoteGate `v0.1.100` (`7a16b375`), OpsGate `v0.1.12` (`b79e8b3e`)다.
 소스는 각 버전의
-[NoteGate OIDC cache](https://github.com/project-jelly/notegate/blob/v0.1.100/backend/crates/api/src/auth/oidc.rs),
-[NoteGate token exchange](https://github.com/project-jelly/notegate/blob/v0.1.100/backend/crates/api/src/auth/oauth_exchange.rs),
-[OpsGate OIDC cache](https://github.com/project-jelly/opsgate/blob/v0.1.12/backend/crates/api/src/auth/oidc.rs),
-[OpsGate token exchange](https://github.com/project-jelly/opsgate/blob/v0.1.12/backend/crates/api/src/auth/oauth_exchange.rs)를 따른다.
+[NoteGate OIDC cache](https://github.com/cagojeiger/notegate/blob/v0.1.100/backend/crates/api/src/auth/oidc.rs),
+[NoteGate token exchange](https://github.com/cagojeiger/notegate/blob/v0.1.100/backend/crates/api/src/auth/oauth_exchange.rs),
+[OpsGate OIDC cache](https://github.com/cagojeiger/opsgate/blob/v0.1.12/backend/crates/api/src/auth/oidc.rs),
+[OpsGate token exchange](https://github.com/cagojeiger/opsgate/blob/v0.1.12/backend/crates/api/src/auth/oauth_exchange.rs)를 따른다.
 두 저장소의 기존 고정 JWKS fixture 테스트만으로 실제 HTTP 키 회전·stale cache·조회 실패가
 검증되었다고 할 수 없다. Browser ID token과 resource-bound access token을 각각 올바른
 소비 경로에서 검증해야 한다. resource-bound MCP token을 AuthGate UserInfo에 보내는
