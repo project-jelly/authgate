@@ -24,6 +24,8 @@ transaction 경계만 보완한다. 관련성이 없는 파일 이동·범용 fr
 | [RFC 7009 §2.1–2.2.1](https://www.rfc-editor.org/rfc/rfc7009.html#section-2.1) | client에 결합된 grant 폐기, 발급과 family 잠금 공유, DB 실패를 성공으로 응답하지 않음 | `TestRefreshAndRevokeSerializeAcrossStorageInstances`, `TestRefreshReuseGrace_RevokeByAnotherClientLeavesGrantAlive`, `TestIntegration_RevokeBackendFailureIsNotSuccess` |
 | [RFC 8725 §3.12](https://www.rfc-editor.org/rfc/rfc8725.html#section-3.12), [RFC 9068 §2/4](https://www.rfc-editor.org/rfc/rfc9068.html#section-4) | JWT 용도 구분, RS256·issuer·서명·만료·필수 claims·대상 검사 | `TestIntegration_UserinfoAccessTokenProfile`, `TestIntegration_IntrospectionRequiresAccessTokenAndOwningClient`, `TestProviderRoutes_UserinfoWithRealProvider`, 기존 `TestIDTokenAtHashMatchesRewrittenAccessToken` |
 | [OIDC Core §5.3–5.4](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo) | 검증된 access scope로만 신원 필드 선택 | `TestIntegration_UserinfoUsesRefreshedScopes`, `TestTokenCallbacksRequireVerifiedClaims` |
+| [RFC 6749 §5.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1) | token route에서 성공·provider/resource 오류·429에 캐시 금지 적용, 토큰 재서명 뒤에도 유지 | `TestProviderRoutes_TokenResponsesAreNotCacheable` |
+| [RFC 8414 §2](https://www.rfc-editor.org/rfc/rfc8414.html#section-2), [RFC 9207 §3](https://www.rfc-editor.org/rfc/rfc9207.html#section-3) | 두 discovery 경로에 실제 지원 capability와 iss/CIMD 정책 광고, library OIDC 필드 보존 | `TestOAuthMetadataRoutes_ShareCapabilitiesAndPreserveProviderDiscovery` |
 
 ## 호환성과 SHOULD 판단
 

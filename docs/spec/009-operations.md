@@ -128,6 +128,11 @@ authgate를 처음 배포할 때 필요한 것:
 | `TRUSTED_PROXIES` | X | — | 프록시 hop으로 신뢰할 CIDR 목록 (콤마 구분). 직전 hop이 이 범위에 속할 때만 클라이언트 IP 추정에 (1) `X-Envoy-External-Address` 헤더 (envoy/istio 가 직접 계산하므로 spoof 불가), (2) `X-Forwarded-For` rightmost-untrusted walk 폴백을 사용한다. 비워두면 모든 프록시 헤더 무시. 예: `10.244.0.0/16,127.0.0.1/32`. istio ingressgateway 등 reverse proxy 뒤에서 운영할 때만 설정. |
 
 `ENABLE_MCP=false`인 경우 `clients.yaml`에 `login_channel: mcp` 항목이 있으면 서버 시작을 거부한다.
+두 discovery 경로(`/.well-known/openid-configuration`,
+`/.well-known/oauth-authorization-server`)의 CIMD 지원 표시는 이 설정과 일치한다.
+공유 capability 계약은 [Spec 004](004-mcp-login.md#authorization-server-metadata)를 참조한다.
+`/oauth/token` route는 rate limit 거절을 포함해 캐시 금지 헤더를 설정하므로,
+프록시에서 token 응답 헤더를 제거하거나 별도 캐시 정책으로 덮어쓰지 않는다.
 
 ### 프로덕션 필수 조건
 

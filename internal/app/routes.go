@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/zitadel/oidc/v3/pkg/op"
 	"golang.org/x/time/rate"
 
 	"github.com/kangheeyong/authgate/internal/config"
@@ -20,7 +21,7 @@ func registerRoutes(
 	cfg *config.Config,
 	db *sql.DB,
 	store *storage.Storage,
-	provider http.Handler,
+	provider op.OpenIDProvider,
 	loginHandler *handler.LoginHandler,
 	deviceHandler *handler.DeviceHandler,
 	logoutHandler *handler.LogoutHandler,
@@ -34,7 +35,7 @@ func registerRoutes(
 	// effective limit and spawning duplicate cleanup goroutines.
 	lim := newRouteLimiters(cfg)
 
-	registerOAuthMetadataRoute(mux, cfg)
+	registerOAuthMetadataRoutes(mux, cfg, provider, store)
 	registerProviderRoutes(mux, cfg, store, provider, lim)
 	registerAuthgateRoutes(mux, cfg, loginHandler, deviceHandler, logoutHandler, mcpLoginHandler, lim)
 	registerHealthRoutes(mux, db, isShuttingDown)
@@ -54,36 +55,6 @@ func newRouteLimiters(cfg *config.Config) routeLimiters {
 	}
 }
 
-func registerOAuthMetadataRoute(mux *http.ServeMux, cfg *config.Config) {
-	mux.HandleFunc("/.well-known/oauth-authorization-server", func(w http.ResponseWriter, r *http.Request) {
-		metadata := map[string]any{
-			"issuer":                           cfg.PublicURL,
-			"authorization_endpoint":           cfg.PublicURL + "/authorize",
-			"token_endpoint":                   cfg.PublicURL + "/oauth/token",
-			"revocation_endpoint":              cfg.PublicURL + "/oauth/revoke",
-			"introspection_endpoint":           cfg.PublicURL + "/oauth/introspect",
-			"device_authorization_endpoint":    cfg.PublicURL + "/oauth/device/authorize",
-			"userinfo_endpoint":                cfg.PublicURL + "/userinfo",
-			"end_session_endpoint":             cfg.PublicURL + "/end_session",
-			"jwks_uri":                         cfg.PublicURL + "/keys",
-			"response_types_supported":         []string{"code"},
-			"grant_types_supported":            []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"},
-			"code_challenge_methods_supported": []string{"S256"},
-			// Auth methods must match zitadel/oidc behavior (RFC 8414 §2):
-			// token + revoke accept none/basic/post; introspection authenticates
-			// only via Basic. See docs/spec/004-mcp-login.md for the rationale.
-			"token_endpoint_auth_methods_supported":          []string{"none", "client_secret_basic", "client_secret_post"},
-			"revocation_endpoint_auth_methods_supported":     []string{"none", "client_secret_basic", "client_secret_post"},
-			"introspection_endpoint_auth_methods_supported":  []string{"client_secret_basic"},
-			"scopes_supported":                               supportedScopes,
-			"authorization_response_iss_parameter_supported": true,
-			"client_id_metadata_document_supported":          cfg.EnableMCP,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(metadata)
-	})
-}
-
 func registerProviderRoutes(mux *http.ServeMux, cfg *config.Config, store *storage.Storage, provider http.Handler, lim routeLimiters) {
 	tokenLimiter, authLimiter := lim.token, lim.auth
 	provider = storage.WrapVerifiedAccessToken(provider, cfg.PublicURL)
@@ -99,14 +70,14 @@ func registerProviderRoutes(mux *http.ServeMux, cfg *config.Config, store *stora
 	mux.Handle("/authorize", authLimiter(middleware.AuthorizationResponseIssuer(cfg.PublicURL, authorize)))
 	mux.Handle("/authorize/callback", middleware.AuthorizationResponseIssuer(cfg.PublicURL, provider))
 	tokenWithAtJWT := storage.WrapAccessTokenJWTType(provider, store)
-	mux.Handle("/oauth/token", tokenLimiter(middleware.TokenLogContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/oauth/token", middleware.NoStore(tokenLimiter(middleware.TokenLogContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resource, err := storage.ResourceFromRequestStrict(r)
 		if err != nil {
 			writeInvalidTargetError(w, err)
 			return
 		}
 		tokenWithAtJWT.ServeHTTP(w, r.WithContext(storage.WithResource(r.Context(), resource)))
-	}))))
+	})))))
 	mux.Handle("/oauth/revoke", tokenLimiter(middleware.TokenLogContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !cfg.EnableMCP {
 			provider.ServeHTTP(w, r)

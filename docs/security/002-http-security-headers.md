@@ -15,6 +15,16 @@ CORS preflight 응답에도 헤더가 포함된다.
 | `Content-Security-Policy` | 아래 참조 | 스크립트 실행 전면 차단 + 리소스 출처 제한 + `frame-ancestors 'none'` |
 | `Strict-Transport-Security` | `max-age=31536000` | HTTPS 강제. **`DEV_MODE=false`일 때만** 전송 |
 
+## 토큰 응답의 캐시 금지
+
+`/oauth/token`에는 `middleware.NoStore`를 rate limiter 바깥에 추가해
+`Cache-Control: no-store`, `Pragma: no-cache`를 설정한다 (RFC 6749 §5.1).
+code·refresh·device 성공 응답과 provider·resource 검증 오류, HTTP 429가 대상이다.
+토큰 응답의 `at+jwt`/`at_hash` 재서명은 이 헤더를 제거하지 않는다.
+이는 전체 사이트의 캐시 정책을 바꾸는 설정이 아니다.
+실제 provider·PostgreSQL·production route를 연결한
+`TestProviderRoutes_TokenResponsesAreNotCacheable`이 이 경계를 검증한다.
+
 ## CSP 정책
 
 ```

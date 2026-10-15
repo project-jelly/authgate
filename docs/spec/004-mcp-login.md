@@ -240,7 +240,11 @@ MCP 서버는 `/.well-known/oauth-protected-resource`에서 최소한 아래를 
 
 ### Authorization Server Metadata
 
-authgate는 `/.well-known/oauth-authorization-server`에서 최소한 아래를 제공해야 한다.
+authgate는 `/.well-known/oauth-authorization-server`와
+`/.well-known/openid-configuration`을 같은 metadata 원천으로 제공한다.
+zitadel/oidc의 전체 Discovery 문서에서 endpoint, signing algorithm, subject type,
+claims, scope와 인증 방식을 재사용하고 AuthGate가 허용하는 response/grant만 좁힌다.
+두 경로는 최소한 아래를 제공한다.
 
 ```json
 {
@@ -249,6 +253,9 @@ authgate는 `/.well-known/oauth-authorization-server`에서 최소한 아래를 
   "token_endpoint": "https://auth.example.com/oauth/token",
   "revocation_endpoint": "https://auth.example.com/oauth/revoke",
   "introspection_endpoint": "https://auth.example.com/oauth/introspect",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
+  "code_challenge_methods_supported": ["S256"],
   "token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
   "revocation_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
   "introspection_endpoint_auth_methods_supported": ["client_secret_basic"],
@@ -257,7 +264,13 @@ authgate는 `/.well-known/oauth-authorization-server`에서 최소한 아래를 
 }
 ```
 
-`client_id_metadata_document_supported` 값은 런타임 설정 `ENABLE_MCP`에 따라 결정된다.
+`client_id_metadata_document_supported` 값은 두 경로 모두 런타임 설정
+`ENABLE_MCP`에 따라 결정되며, 비활성화 시에도 `false`로 명시한다.
+implicit·JWT bearer grant는 광고하지 않는다. 실제 클라이언트의 허용 grant,
+Gitea용 `skip_pkce` 예외와 MCP resource 정책은 기존대로 별도 검증한다.
+
+`/oauth/token`의 성공·오류 응답은 [Spec 005](005-token-lifecycle.md#토큰-응답의-캐시-금지)의
+캐시 금지 계약을 따른다.
 
 `token_endpoint_auth_methods_supported` / `revocation_endpoint_auth_methods_supported` / `introspection_endpoint_auth_methods_supported`는 zitadel/oidc OP가 실제로 받아들이는 인증 방식 집합과 일치해야 한다 (RFC 8414 §2). 컨피덴셜 클라이언트는 이 광고 값을 신뢰해 자격증명 위치를 고를 수 있으므로 누락된 항목이 있으면 디스커버리 기반 클라이언트가 silently 실패한다. `/oauth/introspect`는 zitadel이 기본 마운트하지만 `ClientIDFromRequest`가 Basic 자격증명만 `authenticated=true`로 표시하므로 introspection 광고 집합은 token/revocation보다 좁다.
 
