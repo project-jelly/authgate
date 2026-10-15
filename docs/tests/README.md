@@ -58,6 +58,12 @@ DB readiness, OIDC discovery/JWKS, CA 인증서 및 셸 없는 실행 이미지�
 PostgreSQL 잠금으로 인증 코드 동시 소비(최대 1회), 잘못된 요청 뒤 정상
 재시도, refresh INSERT 실패 시 code 소비 rollback을 검증한다.
 
+`internal/integration/integration_pkce_enforcement_test.go`는 public Browser/MCP의
+S256 요구와 confidential Browser의 `skip_pkce` 호환을 실제 authorize HTTP와 DB로 검증한다.
+challenge가 있는 알 수 없는 method(`S512`, `s256`, `PLAIN`)는 `invalid_request`와
+저장 0건을 확인하고, 면제 클라이언트의 PKCE 없음·명시적/암묵적 plain·method만 있는
+기존 요청은 채널별 로그인 redirect와 저장 값으로 확인한다.
+
 ```text
 문서 = 테스트 설계
 코드 = internal/*_test.go

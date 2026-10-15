@@ -26,6 +26,11 @@ public 클라이언트와 `login_channel: mcp` 클라이언트에는 설정할 �
 전자는 시크릿이 없어 PKCE가 인가 코드 가로채기에 대한 유일한 방어이고, 후자는
 PKCE S256이 MCP 채널 계약의 일부이기 때문이다 ([Spec 004](004-mcp-login.md)).
 
+`skip_pkce: true`여도 전달한 `code_challenge_method`를 임의의 값으로 해석하지 않는다.
+challenge가 있으면 `S256`, `plain`, 메서드 생략(암묵적 `plain`)만 허용하며,
+`S512`나 `s256` 같은 다른 값은 `invalid_request`로 거부하고 auth_request를 저장하지 않는다.
+challenge가 없는 기존 Gitea 요청과 method만 있는 요청의 면제 동작은 유지한다.
+
 토큰 요청 시:
 - confidential: `code_verifier` + `client_secret` 둘 다 전송
 - public: `code_verifier`만 전송 (`client_secret` 없음)
@@ -224,6 +229,7 @@ sequenceDiagram
 | client_id 미등록 | `invalid_client` | 400 | zitadel이 처리 |
 | redirect_uri 불일치 | `invalid_request` | 400 | zitadel이 처리 |
 | PKCE 없음 / plain | `invalid_request` | 400 | S256만 허용 |
+| challenge 있음 + 지원하지 않는 PKCE method | `invalid_request` | 302 | `skip_pkce` 여부와 관계없이 등록된 callback으로 오류 반환, 요청 저장 안 함 |
 | state 누락/불일치 | `invalid_request` | 400 | CSRF 보호 |
 | state 쿠키 누락/불일치 (로그인 CSRF) | `authentication failed` | 401 | 상위 핸들러(`rp.CodeExchangeHandler`)가 state 쿠키 검증 실패 시 일반 메시지로 거부 |
 | nonce 쿠키 누락·변조·빈 값 | `authentication failed` | 401 | 예상 이름의 쿠키를 삭제하고 IdP 코드 교환 전에 거부. 운영에서 기존 `nonce` 쿠키는 인정하지 않음 |
