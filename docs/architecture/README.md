@@ -4,6 +4,11 @@ AuthGate uses the existing zitadel OIDC provider and sqlc query layer. Package
 boundaries are deliberately small; the application does not need another
 framework or a generic workflow engine.
 
+The [issuer signing-key rotation design](issuer-signing-key-rotation.md) records
+the next implementation under [ADR-003](../adr/003-issuer-signing-key-rotation.md).
+It is not implemented runtime behavior; the current single-key startup path
+remains documented in [Operations](../spec/009-operations.md#키-로테이션).
+
 ## Package responsibilities
 
 | Package | Responsibility |
