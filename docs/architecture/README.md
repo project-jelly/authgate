@@ -6,7 +6,7 @@ framework or a generic workflow engine.
 
 The [issuer signing-key rotation design](issuer-signing-key-rotation.md) records
 the optional startup-loaded key bundle under [ADR-003](../adr/003-issuer-signing-key-rotation.md).
-`storage` validates the bundle and owns one active private key plus public-only
+`signing` validates the bundle and owns one active private key plus public-only
 verification sets; `app` selects the mode and wires a separate ID-token-hint key
 set. The bundle remains fixed until process exit. The legacy single-key mode,
 bundle contract and remaining deployment gates are documented in
@@ -20,6 +20,7 @@ bundle contract and remaining deployment gates are documented in
 | `handler` | HTTP binding, cookies, CSRF and rendering; delegates account decisions to services |
 | `service` | Browser, MCP and device workflows, account access rules and lifecycle auditing |
 | `storage` | zitadel storage adapter, persistence orchestration and transaction ownership |
+| `signing` | Immutable signing-key bundle, legacy PEM loading, signing key selection and public JWKS |
 | `db/queries`, `db/storeq` | SQL source and generated queries; runtime storage does not execute handwritten SQL |
 | `upstream` | Upstream OIDC integration, including state/PKCE verification before callback completion |
 | `adapter/mcp` | MCP resource policy and CIMD client metadata fetching/validation |
@@ -36,6 +37,22 @@ fields, provider endpoints and signing algorithms; AuthGate narrows response/gra
 types and advertises its issuer-response and MCP/CIMD policies. `app/routes.go`
 keeps `middleware.NoStore` outside the token rate limiter and response adapter,
 so app-owned rejections and rewritten tokens share the cache prohibition.
+
+## Component dependencies
+
+`app` constructs and connects components. `storage` delegates its OIDC signing
+methods to `signing.Provider`; the signing component does not import storage,
+services, SQL or the composition root. Its private key models and validated bundle
+remain private to that component. The compiler rejects import cycles, and the
+component-boundary check in CI also guards this narrower ownership rule.
+
+```text
+internal/signing/
+  provider.go     signing key selection and public key sets
+  bundle.go       immutable validated bundle and hint-only public keys
+  pem.go          legacy key file loading
+  models.go       private OIDC key representations
+```
 
 ## Login navigation
 

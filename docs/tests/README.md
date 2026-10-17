@@ -64,7 +64,7 @@ challenge가 있는 알 수 없는 method(`S512`, `s256`, `PLAIN`)는 `invalid_r
 저장 0건을 확인하고, 면제 클라이언트의 PKCE 없음·명시적/암묵적 plain·method만 있는
 기존 요청은 채널별 로그인 redirect와 저장 값으로 확인한다.
 
-`internal/storage/signing_key_bundle_test.go`는 bounded strict JSON/PEM/RSA/JWK 검증,
+`internal/signing/bundle_test.go`는 bounded strict JSON/PEM/RSA/JWK 검증,
 중복 ID·키 재료, active 일치, 공개 키 전용 반환과 hint 서명 경계를 검증한다.
 `internal/config/config_test.go`는 bundle/legacy 경로 선택과 상충·공백 설정 거부를 확인한다.
 `internal/app/signing_key_bundle_test.go`는 실제 production wiring의 legacy 유지,
@@ -150,3 +150,5 @@ lookup과 issuance 두 callback을 모두 실행하며, grace 테스트는 confi
 
 인증 코어 리팩토링의 표준 조항·회귀 테스트·호환 정책·종료 기준은
 [005-token-contracts.md](005-token-contracts.md)에 연결한다.
+
+`.github/scripts/test_component_boundaries.py`는 서명 컴포넌트가 다른 내부 패키지를 참조하지 않는 경계를 검사합니다. 기존 Release Policy CI에서 실행합니다.

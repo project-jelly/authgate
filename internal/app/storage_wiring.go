@@ -14,6 +14,7 @@ import (
 	"github.com/kangheeyong/authgate/internal/idgen"
 	"github.com/kangheeyong/authgate/internal/middleware"
 	"github.com/kangheeyong/authgate/internal/service"
+	"github.com/kangheeyong/authgate/internal/signing"
 	"github.com/kangheeyong/authgate/internal/storage"
 )
 
@@ -57,7 +58,7 @@ func configureSigningKey(cfg *config.Config, store *storage.Storage) error {
 		if cfg.SigningKeyPath != "" {
 			return fmt.Errorf("SIGNING_KEY_BUNDLE_PATH and SIGNING_KEY_PATH cannot both be set")
 		}
-		bundle, err := storage.LoadSigningKeyBundle(cfg.SigningKeyBundlePath)
+		bundle, err := signing.LoadBundle(cfg.SigningKeyBundlePath)
 		if err != nil {
 			return fmt.Errorf("load signing key bundle: %w", err)
 		}
@@ -69,7 +70,7 @@ func configureSigningKey(cfg *config.Config, store *storage.Storage) error {
 	if cfg.SigningKeyPath == "" {
 		return fmt.Errorf("SIGNING_KEY_PATH is required when no signing key bundle is configured")
 	}
-	key, err := storage.LoadOrGenerateKey(cfg.SigningKeyPath)
+	key, err := signing.LoadOrGenerateKey(cfg.SigningKeyPath)
 	if err != nil {
 		return fmt.Errorf("load signing key: %w", err)
 	}

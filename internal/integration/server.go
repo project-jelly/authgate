@@ -25,6 +25,7 @@ import (
 	"github.com/kangheeyong/authgate/internal/middleware"
 	"github.com/kangheeyong/authgate/internal/pages"
 	"github.com/kangheeyong/authgate/internal/service"
+	"github.com/kangheeyong/authgate/internal/signing"
 	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/kangheeyong/authgate/internal/testutil"
 	"github.com/kangheeyong/authgate/internal/upstream"
@@ -144,13 +145,13 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 	}
 
 	if opts.SigningKeyBundlePath != "" {
-		bundle, err := storage.LoadSigningKeyBundle(opts.SigningKeyBundlePath)
+		bundle, err := signing.LoadBundle(opts.SigningKeyBundlePath)
 		if err != nil {
 			t.Fatalf("signing key bundle: %v", err)
 		}
 		store.SetSigningKeyBundle(bundle)
 	} else {
-		key, err := storage.LoadOrGenerateKey(t.TempDir() + "/signing_key.pem")
+		key, err := signing.LoadOrGenerateKey(t.TempDir() + "/signing_key.pem")
 		if err != nil {
 			t.Fatalf("signing key: %v", err)
 		}

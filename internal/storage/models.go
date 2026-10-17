@@ -1,10 +1,8 @@
 package storage
 
 import (
-	"crypto/rsa"
 	"time"
 
-	jose "github.com/go-jose/go-jose/v4"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 
@@ -225,26 +223,3 @@ type DeviceCodeModel struct {
 	// the RFC 8628 §3.5 `slow_down` cadence. NULL until the first poll.
 	LastPolledAt *time.Time
 }
-
-// --- Key Models ---
-
-type signingKeyModel struct {
-	id        string
-	algorithm jose.SignatureAlgorithm
-	key       *rsa.PrivateKey
-}
-
-func (k *signingKeyModel) SignatureAlgorithm() jose.SignatureAlgorithm { return k.algorithm }
-func (k *signingKeyModel) Key() any                                    { return k.key }
-func (k *signingKeyModel) ID() string                                  { return k.id }
-
-type publicKeyModel struct {
-	id        string
-	algorithm jose.SignatureAlgorithm
-	key       *rsa.PublicKey
-}
-
-func (k *publicKeyModel) ID() string                         { return k.id }
-func (k *publicKeyModel) Algorithm() jose.SignatureAlgorithm { return k.algorithm }
-func (k *publicKeyModel) Use() string                        { return "sig" }
-func (k *publicKeyModel) Key() any                           { return k.key }

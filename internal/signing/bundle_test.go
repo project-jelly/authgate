@@ -1,4 +1,4 @@
-package storage
+package signing
 
 import (
 	"bytes"
@@ -98,7 +98,7 @@ func signingBundleTestPublic(document map[string]any, index int) map[string]any 
 	return signingBundleTestEntry(document, index)["jwk"].(map[string]any)
 }
 
-func TestSigningKeyBundleRejectsInvalidDocuments(t *testing.T) {
+func TestBundleRejectsInvalidDocuments(t *testing.T) {
 	const secretMarker = "PRIVATE_SENTINEL_DO_NOT_LOG"
 	cases := []struct {
 		name   string
@@ -185,7 +185,7 @@ func TestSigningKeyBundleRejectsInvalidDocuments(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			document := signingBundleTestDocument(t)
 			tc.mutate(document)
-			_, err := parseSigningKeyBundle(signingBundleTestJSON(t, document))
+			_, err := parseBundle(signingBundleTestJSON(t, document))
 			if err == nil {
 				t.Fatal("invalid document accepted")
 			}
@@ -196,7 +196,7 @@ func TestSigningKeyBundleRejectsInvalidDocuments(t *testing.T) {
 	}
 }
 
-func TestSigningKeyBundleRejectsDuplicateAndMalformedJSON(t *testing.T) {
+func TestBundleRejectsDuplicateAndMalformedJSON(t *testing.T) {
 	valid := string(signingBundleTestJSON(t, signingBundleTestDocument(t)))
 	cases := map[string][]byte{
 		"duplicate root":   []byte(strings.Replace(valid, `"schema_version":1`, `"schema_version":1,"schema_version":1`, 1)),
@@ -211,30 +211,30 @@ func TestSigningKeyBundleRejectsDuplicateAndMalformedJSON(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := parseSigningKeyBundle(data); err == nil {
+			if _, err := parseBundle(data); err == nil {
 				t.Fatal("malformed or duplicate JSON accepted")
 			}
 		})
 	}
 }
 
-func TestSigningKeyBundleLoadIsBoundedAndDoesNotExposePath(t *testing.T) {
+func TestBundleLoadIsBoundedAndDoesNotExposePath(t *testing.T) {
 	data := signingBundleTestJSON(t, signingBundleTestDocument(t))
 	path := filepath.Join(t.TempDir(), "PRIVATE_SENTINEL.json")
 	data = append(data, bytes.Repeat([]byte(" "), signingKeyBundleMaxBytes-len(data))...)
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadSigningKeyBundle(path); err != nil {
+	if _, err := LoadBundle(path); err != nil {
 		t.Fatalf("valid document at size limit refused: %v", err)
 	}
 	if err := os.WriteFile(path, append(data, ' '), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadSigningKeyBundle(path); err == nil || strings.Contains(err.Error(), path) {
+	if _, err := LoadBundle(path); err == nil || strings.Contains(err.Error(), path) {
 		t.Fatal("size limit or path privacy failed")
 	}
-	if _, err := LoadSigningKeyBundle(path + ".missing"); err == nil || strings.Contains(err.Error(), "PRIVATE_SENTINEL") {
+	if _, err := LoadBundle(path + ".missing"); err == nil || strings.Contains(err.Error(), "PRIVATE_SENTINEL") {
 		t.Fatal("missing file error exposed its path")
 	}
 }
@@ -260,7 +260,7 @@ func signingBundleTestSigned(t *testing.T, key *rsa.PrivateKey, kid string, algo
 	return parsed
 }
 
-func TestSigningKeyBundleRejectsWeakAndCorruptPrivateMaterial(t *testing.T) {
+func TestBundleRejectsWeakAndCorruptPrivateMaterial(t *testing.T) {
 	weak, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		t.Fatal(err)
@@ -271,29 +271,29 @@ func TestSigningKeyBundleRejectsWeakAndCorruptPrivateMaterial(t *testing.T) {
 	for _, key := range []*rsa.PrivateKey{weak, &corrupt} {
 		document := signingBundleTestDocument(t)
 		document["active_private_key_pem"] = string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
-		if _, err := parseSigningKeyBundle(signingBundleTestJSON(t, document)); err == nil {
+		if _, err := parseBundle(signingBundleTestJSON(t, document)); err == nil {
 			t.Fatal("weak or invalid RSA private key accepted")
 		}
 	}
 }
 
-func TestSigningKeyBundleSeparatesPublishedAndHintKeys(t *testing.T) {
+func TestBundleSeparatesPublishedAndHintKeys(t *testing.T) {
 	document := signingBundleTestDocument(t)
-	bundle, err := parseSigningKeyBundle(signingBundleTestJSON(t, document))
+	bundle, err := parseBundle(signingBundleTestJSON(t, document))
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := new(Storage)
-	store.SetSigningKeyBundle(bundle)
+	provider := new(Provider)
+	provider.SetBundle(bundle)
 	if bundle.KeyCount() != 3 {
 		t.Fatalf("key count = %d", bundle.KeyCount())
 	}
-	current, err := store.SigningKey(context.Background())
+	current, err := provider.SigningKey()
 	if err != nil || current.ID() != document["active_kid"] {
 		t.Fatal("incorrect active signer")
 	}
-	published, err := store.KeySet(context.Background())
-	if err != nil || len(published) != 2 {
+	published := provider.KeySet()
+	if len(published) != 2 {
 		t.Fatal("incorrect published key count")
 	}
 	for _, key := range published {
@@ -302,13 +302,13 @@ func TestSigningKeyBundleSeparatesPublishedAndHintKeys(t *testing.T) {
 		}
 	}
 	keys := signingBundleTestKeys(t)
-	local := &op.OpenIDKeySet{Storage: store}
+	local := &op.OpenIDKeySet{Storage: &providerKeyStorage{provider: provider}}
 	for i := 0; i < 3; i++ {
 		kid := signingBundleTestPublic(document, i)["kid"].(string)
 		signed := signingBundleTestSigned(t, keys[i], kid, jose.RS256)
 		// Expiration belongs to the provider verifier, not this key set. In
 		// particular an old signature must remain available for expired hints.
-		if _, err := store.IDTokenHintKeySet().VerifySignature(context.Background(), signed); err != nil {
+		if _, err := provider.IDTokenHintKeySet().VerifySignature(context.Background(), signed); err != nil {
 			t.Fatalf("hint key %d refused: %v", i, err)
 		}
 		_, err := local.VerifySignature(context.Background(), signed)
@@ -318,15 +318,26 @@ func TestSigningKeyBundleSeparatesPublishedAndHintKeys(t *testing.T) {
 	}
 	// A caller mutating a returned JWKS key must not alter the snapshot or hints.
 	published[0].Key().(*rsa.PublicKey).N.SetInt64(1)
-	fresh, _ := store.KeySet(context.Background())
+	fresh := provider.KeySet()
 	if fresh[0].Key().(*rsa.PublicKey).N.BitLen() < 2048 {
 		t.Fatal("returned key mutated the immutable snapshot")
 	}
 }
 
-func TestSigningKeyBundleHintVerifierRejectsWrongHeadersAndSignatures(t *testing.T) {
+// providerKeyStorage adapts only the method exercised by op.OpenIDKeySet. The
+// signing component does not depend on AuthGate's persistence adapter.
+type providerKeyStorage struct {
+	op.Storage
+	provider *Provider
+}
+
+func (s *providerKeyStorage) KeySet(context.Context) ([]op.Key, error) {
+	return s.provider.KeySet(), nil
+}
+
+func TestBundleHintVerifierRejectsWrongHeadersAndSignatures(t *testing.T) {
 	document := signingBundleTestDocument(t)
-	bundle, err := parseSigningKeyBundle(signingBundleTestJSON(t, document))
+	bundle, err := parseBundle(signingBundleTestJSON(t, document))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,24 +360,24 @@ func TestSigningKeyBundleHintVerifierRejectsWrongHeadersAndSignatures(t *testing
 	}
 }
 
-func TestSigningKeyBundleReloadPreservesIdentityAndOnlyLogsPublicMetadata(t *testing.T) {
+func TestBundleReloadPreservesIdentityAndOnlyLogsPublicMetadata(t *testing.T) {
 	document := signingBundleTestDocument(t)
 	path := filepath.Join(t.TempDir(), "bundle.json")
 	if err := os.WriteFile(path, signingBundleTestJSON(t, document), 0600); err != nil {
 		t.Fatal(err)
 	}
-	first, err := LoadSigningKeyBundle(path)
+	first, err := LoadBundle(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := LoadSigningKeyBundle(path)
+	second, err := LoadBundle(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, bundle := range []*SigningKeyBundle{first, second} {
-		store := new(Storage)
-		store.SetSigningKeyBundle(bundle)
-		key, err := store.SigningKey(context.Background())
+	for _, bundle := range []*Bundle{first, second} {
+		provider := new(Provider)
+		provider.SetBundle(bundle)
+		key, err := provider.SigningKey()
 		if err != nil || key.ID() != first.activeID || bundle.KeyCount() != 3 {
 			t.Fatal("restart changed the key identity")
 		}
@@ -394,32 +405,32 @@ func TestSigningKeyBundleReloadPreservesIdentityAndOnlyLogsPublicMetadata(t *tes
 	}
 }
 
-func TestSigningKeyBundleLegacyMigrationAndInitializationBoundary(t *testing.T) {
+func TestBundleLegacyMigrationAndInitializationBoundary(t *testing.T) {
 	document := signingBundleTestDocument(t)
 	document["active_kid"] = legacySigningKeyID
 	signingBundleTestPublic(document, 0)["kid"] = legacySigningKeyID
-	bundle, err := parseSigningKeyBundle(signingBundleTestJSON(t, document))
+	bundle, err := parseBundle(signingBundleTestJSON(t, document))
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := new(Storage)
+	provider := new(Provider)
 	keys := signingBundleTestKeys(t)
-	store.SetSigningKey(keys[0], legacySigningKeyID)
-	store.SetPreviousKey(keys[1], "previous")
-	if store.IDTokenHintKeySet() != nil {
+	provider.SetCurrent(keys[0], legacySigningKeyID)
+	provider.SetPrevious(keys[1], "previous")
+	if provider.IDTokenHintKeySet() != nil {
 		t.Fatal("legacy hint key set must use the provider default")
 	}
-	if store.signing.previous == &keys[1].PublicKey {
+	if provider.previous == &keys[1].PublicKey {
 		t.Fatal("legacy previous public key was not copied")
 	}
-	store.SetSigningKeyBundle(bundle)
-	if store.signing.current != nil || store.signing.previous != nil {
+	provider.SetBundle(bundle)
+	if provider.current != nil || provider.previous != nil {
 		t.Fatal("legacy material retained after bundle initialization")
 	}
 	for _, change := range []func(){
-		func() { store.SetSigningKeyBundle(bundle) },
-		func() { store.SetSigningKey(keys[1], "replacement") },
-		func() { store.SetPreviousKey(keys[1], "replacement") },
+		func() { provider.SetBundle(bundle) },
+		func() { provider.SetCurrent(keys[1], "replacement") },
+		func() { provider.SetPrevious(keys[1], "replacement") },
 	} {
 		func() {
 			defer func() {

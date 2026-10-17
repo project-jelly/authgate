@@ -10,6 +10,7 @@ import (
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/crypto"
 	"github.com/kangheeyong/authgate/internal/idgen"
+	"github.com/kangheeyong/authgate/internal/signing"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
@@ -54,7 +55,7 @@ type Storage struct {
 	clock           clock.Clock
 	idgen           idgen.IDGenerator
 	stateChecker    StateChecker
-	signing         signingKeyProvider
+	signing         signing.Provider
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
 	// devicePollInterval is the minimum gap between successive device-flow
@@ -131,7 +132,7 @@ func (s *Storage) SetPreviousKey(key *rsa.PrivateKey, keyID string) {
 
 // SetSigningKeyBundle installs a validated immutable snapshot during startup,
 // before handlers can use the Storage. Reconfiguration requires a new process.
-func (s *Storage) SetSigningKeyBundle(bundle *SigningKeyBundle) {
+func (s *Storage) SetSigningKeyBundle(bundle *signing.Bundle) {
 	s.signing.SetBundle(bundle)
 }
 

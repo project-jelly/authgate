@@ -1,4 +1,4 @@
-package storage
+package signing
 
 import (
 	"bytes"
@@ -29,10 +29,10 @@ const (
 	legacySigningKeyID       = "authgate-key-1"
 )
 
-// SigningKeyBundle is a validated startup snapshot. Only its active key contains
+// Bundle is a validated startup snapshot. Only its active key contains
 // private material; verification keys remain public even after publication ends.
 // Its contents are deliberately unexported and never reloaded during serving.
-type SigningKeyBundle struct {
+type Bundle struct {
 	revision string
 	activeID string
 	active   *rsa.PrivateKey
@@ -47,9 +47,9 @@ type bundleVerificationKey struct {
 	publish     bool
 }
 
-// LoadSigningKeyBundle reads at most the documented size limit plus one byte.
+// LoadBundle reads at most the documented size limit plus one byte.
 // Errors never include input paths, JSON members/values or cryptographic material.
-func LoadSigningKeyBundle(path string) (*SigningKeyBundle, error) {
+func LoadBundle(path string) (*Bundle, error) {
 	//nolint:gosec // Path is operator-controlled SIGNING_KEY_BUNDLE_PATH, not request input.
 	f, err := os.Open(path)
 	if err != nil {
@@ -63,10 +63,10 @@ func LoadSigningKeyBundle(path string) (*SigningKeyBundle, error) {
 	if len(data) > signingKeyBundleMaxBytes {
 		return nil, errors.New("signing key bundle: file exceeds size limit")
 	}
-	return parseSigningKeyBundle(data)
+	return parseBundle(data)
 }
 
-func parseSigningKeyBundle(data []byte) (*SigningKeyBundle, error) {
+func parseBundle(data []byte) (*Bundle, error) {
 	if len(data) > signingKeyBundleMaxBytes || !utf8.Valid(data) || !validBundleJSON(data) {
 		return nil, errors.New("signing key bundle: invalid JSON")
 	}
@@ -98,7 +98,7 @@ func parseSigningKeyBundle(data []byte) (*SigningKeyBundle, error) {
 	if json.Unmarshal(root["verification_keys"], &entries) != nil || len(entries) == 0 || len(entries) > signingKeyBundleMaxKeys {
 		return nil, errors.New("signing key bundle: invalid verification key count")
 	}
-	bundle := &SigningKeyBundle{revision: revision, activeID: activeID, active: active}
+	bundle := &Bundle{revision: revision, activeID: activeID, active: active}
 	ids := make(map[string]struct{}, len(entries))
 	material := make(map[string]struct{}, len(entries))
 	activeFound := false
@@ -288,7 +288,7 @@ func bundleBase64Integer(value string) ([]byte, bool) {
 }
 
 // LogValue intentionally contains only operator revision and public metadata.
-func (b *SigningKeyBundle) LogValue() slog.Value {
+func (b *Bundle) LogValue() slog.Value {
 	if b == nil {
 		return slog.GroupValue()
 	}
@@ -304,9 +304,9 @@ func (b *SigningKeyBundle) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("revision", b.revision), slog.String("active_kid", b.activeID), slog.Any("verification_keys", keys))
 }
 
-func (b *SigningKeyBundle) KeyCount() int { return len(b.keys) }
+func (b *Bundle) KeyCount() int { return len(b.keys) }
 
-func (b *SigningKeyBundle) publishedKeys() []op.Key {
+func (b *Bundle) publishedKeys() []op.Key {
 	keys := make([]op.Key, 0, len(b.keys))
 	for _, key := range b.keys {
 		if key.publish {

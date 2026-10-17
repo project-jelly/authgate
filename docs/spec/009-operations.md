@@ -195,7 +195,7 @@ HASH=$(htpasswd -nbBC 10 "" "$SECRET" | cut -d: -f2)
 
 `SIGNING_KEY_BUNDLE_PATH`가 미설정·빈 값이면 기존 `SIGNING_KEY_PATH`의 RSA 키 하나를
 읽고 `kid=authgate-key-1`로 등록한다. 기존 모드의 파일 자동 생성 동작도 유지한다.
-bundle 경로가 nonempty이면 [`LoadSigningKeyBundle`](../../internal/storage/signing_key_bundle.go)로
+bundle 경로가 nonempty이면 [`signing.LoadBundle`](../../internal/signing/bundle.go)로
 묶음 전체를 검증하고 [`app wiring`](../../internal/app/storage_wiring.go)에서 적용한다.
 명시적인 nonempty legacy 경로와 동시 설정하면 시작을 거부한다. legacy 환경변수가
 빈 값이면 미설정처럼 처리하고, 공백으로만 된 경로는 어느 모드에서든 구성 오류다.
