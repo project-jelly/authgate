@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/kangheeyong/authgate/internal/storage"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 // clientResolver is the minimal slice of the storage interface needed to
@@ -11,7 +11,7 @@ import (
 // interface includes ResolveClient so this helper accepts the full store
 // without ceremony.
 type clientResolver interface {
-	ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error)
+	ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error)
 }
 
 // resolveClientName returns the human-readable name for clientID, or an

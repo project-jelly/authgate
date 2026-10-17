@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
-	"github.com/kangheeyong/authgate/internal/storage"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -167,8 +167,8 @@ func NewHTTPCIMDFetcher(hosts CIMDHostPolicy) *HTTPCIMDFetcher {
 	}
 }
 
-func (f *HTTPCIMDFetcher) FetchClient(ctx context.Context, clientID string) (*storage.ClientModel, error) {
-	if !storage.IsCIMDClientID(clientID) {
+func (f *HTTPCIMDFetcher) FetchClient(ctx context.Context, clientID string) (*oauthclient.Model, error) {
+	if !oauthclient.IsCIMDClientID(clientID) {
 		return nil, fmt.Errorf("cimd: invalid client_id URL")
 	}
 	if !isCanonicalCIMDClientID(clientID) {
@@ -215,12 +215,12 @@ func (f *HTTPCIMDFetcher) FetchClient(ctx context.Context, clientID string) (*st
 	if err != nil {
 		return nil, err
 	}
-	client := v.(*storage.ClientModel)
+	client := v.(*oauthclient.Model)
 
 	return client, nil
 }
 
-func (f *HTTPCIMDFetcher) fetchAndValidate(ctx context.Context, clientID string) (*storage.ClientModel, time.Duration, error) {
+func (f *HTTPCIMDFetcher) fetchAndValidate(ctx context.Context, clientID string) (*oauthclient.Model, time.Duration, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, clientID, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("cimd: invalid URL: %w", err)

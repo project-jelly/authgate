@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/storage"
 )
 
@@ -19,7 +20,7 @@ type LoginStore interface {
 	GetUserByID(ctx context.Context, userID string) (*storage.User, error)
 	CreateSession(ctx context.Context, userID string, ttl time.Duration) (string, error)
 	GetAuthRequestModel(ctx context.Context, id string) (*storage.AuthRequestModel, error)
-	ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error)
+	ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error)
 	SetIdentityHostedDomain(ctx context.Context, provider, providerUserID, hostedDomain string) error
 }
 

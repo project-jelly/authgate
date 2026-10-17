@@ -60,7 +60,7 @@ Browser / Device / MCP / Refresh / Logout / Delete 각 채널이 공통 상태�
 | `client-access-001`~`004` | `access` 없음 / `public` / allow·deny 정책 | `Policy.Evaluate` | deny 우선, hd 정확 일치(NULL 불일치), 와일드카드 라벨 경계·상위 도메인 제외, 미검증 email은 이메일 규칙 불일치(`email_unverified`), ASCII 대소문자만 무시(켈빈 기호 불일치) | 평가 매트릭스 |
 | `client-access-010`~`011` | - | `clientaccess.New` | 잘못된 도메인·`*.com`·점 없는 도메인·중간 `*`·hd 와일드카드·잘못된 이메일·빈 allow 거부, 정규화·중복 제거 | 설정 검증 |
 | `client-access-020`~`021` | - | YAML `access` 디코딩 (KnownFields 켜짐/꺼짐 모두) | `public`·mapping 허용, 다른 스칼라·`allow` 누락·빈 `allow`·`access`/`allow` 안의 알 수 없는 키·`deny.email_domains` 거부 | 엄격 디코딩 |
-| `client-access-030`~`031` | - | `LoadClientConfig` | 정책이 `ResolveClient`로 전달, `access: public`은 명시적 공개, 빈 `access:`/`null`/null을 가리키는 YAML alias 거부 | 시작 시 로드 |
+| `client-access-030`~`031` | - | `client.LoadConfig` | 정책이 `ResolveClient`로 전달, `access: public`은 명시적 공개, 빈 `access:`/`null`/null을 가리키는 YAML alias 거부 | 시작 시 로드 |
 | `client-access-200`~`202` | 미가입, 제한 클라이언트 | `/login/callback` | 거부: `access_denied` redirect, 계정·세션 없음, `auth.access_denied` 1(user_id nil, `signup: true`) / 허용: 가입 + hd 저장 | 계정 생성 **전** 차단 |
 | `client-access-203`~`205` | 기존 계정 | `/login/callback` | 거부 시 세션 없음, 방금 받은 hd로 평가·기록, hd 기록 실패는 500 | 최신 hd |
 | `client-access-206`~`207` | `disabled` / `pending_deletion` + 거부 정책 | `/login/callback`, `/login` | `account_inactive`(`auth.inactive_user`만) / `access_denied`, 복구 안 함 | 판정 순서 |
@@ -75,7 +75,7 @@ Browser / Device / MCP / Refresh / Logout / Delete 각 채널이 공통 상태�
 | `client-access-106` | 콜백까지 끝나 code 보유 | 정책에 계정 deny 추가(`LoadClients`) 후 code 교환 | 400 `invalid_grant`, 토큰·refresh token 없음, `auth.access_denied` 1(`channel: browser`, `deny_listed`), 응답 본문이 존재하지 않는 code와 완전히 동일 | code 교환 재평가 + 인증 전 사유 비노출 |
 | `client-access-107` | device code 승인됨 | 정책에 계정 deny 추가 후 polling → 정책 해제 후 polling | 400 거부, `auth.access_denied` 1(`channel: device`), code는 `approved` 유지 / 해제 후 200 토큰 | device polling 재평가 |
 
-`client-access-001`~`021`은 `internal/clientaccess/clientaccess_test.go`, `030`~`031`은 `internal/storage/clients_test.go`,
+`client-access-001`~`021`은 `internal/clientaccess/clientaccess_test.go`, `030`~`031`은 `internal/client/config_test.go`,
 `2xx`는 `internal/service/client_access_unit_test.go`, `300`~`305`는 `internal/storage/client_access_integration_test.go`,
 `100`~`107`은 `internal/integration/integration_client_access_test.go`에 있다.
 

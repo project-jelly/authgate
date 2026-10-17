@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
+
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 func TestCodes_HashedAtRest(t *testing.T) {
@@ -82,7 +84,7 @@ func TestCodes_HashedAtRest(t *testing.T) {
 func TestCreateAuthRequest_PromptRoundTrip(t *testing.T) {
 	s := testStorage(t)
 	ctx := context.Background()
-	s.LoadClients([]ClientConfigEntry{{
+	s.LoadClients([]oauthclient.ConfigEntry{{
 		ClientID:          "prompt-app",
 		ClientType:        "public",
 		LoginChannel:      "browser",

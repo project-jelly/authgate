@@ -6,7 +6,7 @@ framework or a generic workflow engine.
 
 The [issuer signing-key rotation design](issuer-signing-key-rotation.md) records
 the optional startup-loaded key bundle under [ADR-003](../adr/003-issuer-signing-key-rotation.md).
-`storage` validates the bundle and owns one active private key plus public-only
+`signing` validates the bundle and owns one active private key plus public-only
 verification sets; `app` selects the mode and wires a separate ID-token-hint key
 set. The bundle remains fixed until process exit. The legacy single-key mode,
 bundle contract and remaining deployment gates are documented in
@@ -20,15 +20,17 @@ bundle contract and remaining deployment gates are documented in
 | `handler` | HTTP binding, cookies, CSRF and rendering; delegates account decisions to services |
 | `service` | Browser, MCP and device workflows, account access rules and lifecycle auditing |
 | `storage` | zitadel storage adapter, persistence orchestration and transaction ownership |
+| `signing` | Immutable signing-key bundle, legacy PEM loading, signing key selection and public JWKS |
+| `client` | OAuth client model, YAML validation, static registry and resolution/resource policy contracts |
 | `db/queries`, `db/storeq` | SQL source and generated queries; runtime storage does not execute handwritten SQL |
 | `upstream` | Upstream OIDC integration, including state/PKCE verification before callback completion |
 | `adapter/mcp` | MCP resource policy and CIMD client metadata fetching/validation |
 | `clientaccess`, `middleware` | Client access policy and HTTP cross-cutting concerns |
 | `crypto`, `clock`, `idgen` | Cryptographic primitives and injectable time/identifier sources |
 
-Services still use storage models through their store interfaces. The file
-boundaries below improve navigation without changing package APIs or introducing
-a second model hierarchy.
+Services use storage models through their store interfaces for persistence and
+`client.Model` for OAuth client profiles. Each model has one owning package; the
+component extraction does not introduce a second model hierarchy.
 
 `app/metadata.go` serves both OIDC Discovery and OAuth authorization-server
 metadata from `op.CreateDiscoveryConfig`. The library owns the complete OIDC
@@ -36,6 +38,41 @@ fields, provider endpoints and signing algorithms; AuthGate narrows response/gra
 types and advertises its issuer-response and MCP/CIMD policies. `app/routes.go`
 keeps `middleware.NoStore` outside the token rate limiter and response adapter,
 so app-owned rejections and rewritten tokens share the cache prohibition.
+
+## Component dependencies
+
+`app` constructs and connects components. `storage` delegates its OIDC signing
+methods to `signing.Provider`; the signing component does not import storage,
+services, SQL or the composition root. Its private key models and validated bundle
+remain private to that component. The compiler rejects import cycles, and the
+component-boundary check in CI also guards this narrower ownership rule.
+
+`client` owns its models and policy contracts. `storage`, services and the MCP
+adapter depend on those contracts; the client component depends only on the
+existing account-access policy package. Its static lookup methods never invoke
+the configured resolver: code/refresh/device operations may hold DB locks, so
+those paths must not fetch CIMD metadata. `Storage.CoreClientResolver` exposes
+the static resolver for composition, while `Storage.ResolveClient` maps a client
+lookup miss back to the storage sentinel used by OIDC error handling.
+
+```text
+internal/signing/
+  provider.go     signing key selection and public key sets
+  bundle.go       immutable validated bundle and hint-only public keys
+  pem.go          legacy key file loading
+  models.go       private OIDC key representations
+internal/client/
+  model.go        OAuth client representation and protocol methods
+  config.go       YAML parsing and validation
+  registry.go     static table and resolver delegation
+  policy.go       resolution/resource contracts and default policies
+  cimd.go         metadata fetch contract and client ID validation
+```
+
+The dependency direction is `app -> storage -> signing/client`, with services
+and `adapter/mcp` also using client contracts. Neither extracted component
+imports storage, services, handlers, SQL or the composition root. Code consumption
+and refresh issuance/revocation retain their existing transaction owner.
 
 ## Login navigation
 

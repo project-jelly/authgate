@@ -6,20 +6,20 @@ import (
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 
-	"github.com/kangheeyong/authgate/internal/storage"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 type clientResolutionPolicy struct {
-	base    storage.ClientResolutionPolicy
-	fetcher storage.CIMDFetcher
+	base    oauthclient.ResolutionPolicy
+	fetcher oauthclient.CIMDFetcher
 }
 
-func (p *clientResolutionPolicy) ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error) {
+func (p *clientResolutionPolicy) ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error) {
 	client, err := p.base.ResolveClient(ctx, clientID)
 	if err == nil {
 		return client, nil
 	}
-	if p.fetcher != nil && storage.IsCIMDClientID(clientID) && errors.Is(err, storage.ErrNotFound) {
+	if p.fetcher != nil && oauthclient.IsCIMDClientID(clientID) && errors.Is(err, oauthclient.ErrNotFound) {
 		return p.fetcher.FetchClient(ctx, clientID)
 	}
 	return nil, err
@@ -30,12 +30,12 @@ func (p *clientResolutionPolicy) ResolveClient(ctx context.Context, clientID str
 // browser clients MUST NOT carry one — a browser minting an MCP-audience token
 // is a boundary-confusion attack (#184).
 type resourceBindingPolicy struct {
-	base     storage.ResourceBindingPolicy
-	resolver storage.ClientResolutionPolicy
+	base     oauthclient.ResourceBindingPolicy
+	resolver oauthclient.ResolutionPolicy
 }
 
 // ValidateAuthorizeRequest is the primary enforcement point for the matrix.
-func (p *resourceBindingPolicy) ValidateAuthorizeRequest(ctx context.Context, client *storage.ClientModel, requestResource string) error {
+func (p *resourceBindingPolicy) ValidateAuthorizeRequest(ctx context.Context, client *oauthclient.Model, requestResource string) error {
 	if client != nil {
 		if client.LoginChannel == "mcp" {
 			if requestResource == "" {
@@ -67,7 +67,7 @@ func (p *resourceBindingPolicy) ValidateTokenRequest(ctx context.Context, client
 	return p.base.ValidateTokenRequest(ctx, clientID, storedResource, requestResource)
 }
 
-func NewClientResolutionPolicy(base storage.ClientResolutionPolicy, fetcher storage.CIMDFetcher) storage.ClientResolutionPolicy {
+func NewClientResolutionPolicy(base oauthclient.ResolutionPolicy, fetcher oauthclient.CIMDFetcher) oauthclient.ResolutionPolicy {
 	return &clientResolutionPolicy{base: base, fetcher: fetcher}
 }
 
@@ -78,6 +78,6 @@ func NewClientResolutionPolicy(base storage.ClientResolutionPolicy, fetcher stor
 // lookup), not the CIMD-augmented one: the token check only needs to catch a
 // browser client carrying a resource, and browser clients are always locally
 // registered, so the token endpoint must never trigger an outbound CIMD fetch.
-func NewResourceBindingPolicy(base storage.ResourceBindingPolicy, resolver storage.ClientResolutionPolicy) storage.ResourceBindingPolicy {
+func NewResourceBindingPolicy(base oauthclient.ResourceBindingPolicy, resolver oauthclient.ResolutionPolicy) oauthclient.ResourceBindingPolicy {
 	return &resourceBindingPolicy{base: base, resolver: resolver}
 }

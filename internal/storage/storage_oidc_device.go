@@ -193,7 +193,7 @@ func (s *Storage) GetDeviceAuthorizatonState(ctx context.Context, clientID, devi
 	//
 	// The client's access policy is re-evaluated the same way, so a policy
 	// tightened between approval and poll refuses the approved code too.
-	access := s.ensureRegistry().staticAccess(dc.ClientID)
+	access := s.ensureRegistry().StaticAccess(dc.ClientID)
 	if dc.State == "approved" && dc.Subject != nil && (s.stateChecker != nil || access.Restricted()) {
 		user, lookupErr := s.getUserByID(ctx, tx, *dc.Subject)
 		if lookupErr != nil {

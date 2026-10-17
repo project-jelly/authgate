@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
+
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 func refreshFormRequest(t *testing.T, ts *TestServer, form url.Values) *TokenResponse {
@@ -47,7 +48,7 @@ func TestIntegration_InvalidRefreshRequestPreservesGrant(t *testing.T) {
 				form.Set("client_id", "unregistered-client")
 			}
 			if field == "client_id" {
-				ts.Store.LoadClients([]storage.ClientConfigEntry{{ClientID: "other-client", ClientType: "public", AllowedGrantTypes: []string{"refresh_token"}}})
+				ts.Store.LoadClients([]oauthclient.ConfigEntry{{ClientID: "other-client", ClientType: "public", AllowedGrantTypes: []string{"refresh_token"}}})
 				form.Set(field, "other-client")
 			}
 			r := refreshFormRequest(t, ts, form)
@@ -176,7 +177,7 @@ func TestIntegration_ConfidentialRefreshGraceRequiresClientAuthentication(t *tes
 		t.Fatal(err)
 	}
 	secretHash := string(hash)
-	ts.Store.LoadClients([]storage.ClientConfigEntry{{ClientID: "test-client", ClientType: "confidential", ClientSecretHash: &secretHash, AllowedGrantTypes: []string{"refresh_token"}, AllowedScopes: []string{"openid", "profile", "email", "offline_access"}}})
+	ts.Store.LoadClients([]oauthclient.ConfigEntry{{ClientID: "test-client", ClientType: "confidential", ClientSecretHash: &secretHash, AllowedGrantTypes: []string{"refresh_token"}, AllowedScopes: []string{"openid", "profile", "email", "offline_access"}}})
 	form := url.Values{"grant_type": {"refresh_token"}, "client_id": {"test-client"}, "refresh_token": {tokens.RefreshToken}}
 	// Knowing the token without the confidential client's secret is not enough.
 	if r := refreshFormRequest(t, ts, form); r.StatusCode == 200 {

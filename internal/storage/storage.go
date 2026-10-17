@@ -1,15 +1,16 @@
 package storage
 
 import (
-	"context"
 	"crypto/rsa"
 	"database/sql"
 	"errors"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/crypto"
 	"github.com/kangheeyong/authgate/internal/idgen"
+	"github.com/kangheeyong/authgate/internal/signing"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
@@ -36,25 +37,12 @@ var (
 // Injected from main.go — storage never imports service or guard packages.
 type StateChecker func(user *User) error
 
-// ClientResolutionPolicy resolves a client profile for client_id.
-// It is invoked by storage methods that zitadel calls directly.
-type ClientResolutionPolicy interface {
-	ResolveClient(ctx context.Context, clientID string) (*ClientModel, error)
-}
-
-// ResourceBindingPolicy validates resource binding across authorize/token flows.
-// Default policy preserves current behavior for browser/mcp resource checks.
-type ResourceBindingPolicy interface {
-	ValidateAuthorizeRequest(ctx context.Context, client *ClientModel, requestResource string) error
-	ValidateTokenRequest(ctx context.Context, clientID, storedResource, requestResource string) error
-}
-
 type Storage struct {
 	db              *sql.DB
 	clock           clock.Clock
 	idgen           idgen.IDGenerator
 	stateChecker    StateChecker
-	signing         signingKeyProvider
+	signing         signing.Provider
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
 	// devicePollInterval is the minimum gap between successive device-flow
@@ -67,9 +55,9 @@ type Storage struct {
 	// default in New) disables the grace; the app sets it from
 	// REFRESH_TOKEN_REUSE_GRACE_SEC. See TokenRequestByRefreshToken.
 	refreshReuseGrace time.Duration
-	registry          *clientRegistry
+	registry          *oauthclient.Registry
 	audit             *auditLogger
-	resourcePolicy    ResourceBindingPolicy
+	resourcePolicy    oauthclient.ResourceBindingPolicy
 	// keys holds the PII at-rest crypto subkeys (ADR-002). nil until SetKeys is
 	// called at startup; while nil, encryption is inert. Required in production.
 	keys *crypto.Keys
@@ -84,10 +72,10 @@ func New(db *sql.DB, clk clock.Clock, gen idgen.IDGenerator, checker StateChecke
 		accessTokenTTL:     accessTTL,
 		refreshTokenTTL:    refreshTTL,
 		devicePollInterval: 5 * time.Second,
-		registry:           newClientRegistry(),
+		registry:           oauthclient.NewRegistry(),
 	}
 	s.audit = newAuditLogger(db, clk, s.sessionAtRest)
-	s.resourcePolicy = NewCoreResourceBindingPolicy()
+	s.resourcePolicy = oauthclient.NewCoreResourceBindingPolicy()
 	return s
 }
 
@@ -131,7 +119,7 @@ func (s *Storage) SetPreviousKey(key *rsa.PrivateKey, keyID string) {
 
 // SetSigningKeyBundle installs a validated immutable snapshot during startup,
 // before handlers can use the Storage. Reconfiguration requires a new process.
-func (s *Storage) SetSigningKeyBundle(bundle *SigningKeyBundle) {
+func (s *Storage) SetSigningKeyBundle(bundle *signing.Bundle) {
 	s.signing.SetBundle(bundle)
 }
 

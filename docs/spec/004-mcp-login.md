@@ -298,7 +298,7 @@ GET https://app.example.com/oauth/client.json
 }
 ```
 
-`grant_types`에 authgate가 지원하지 않는 grant가 추가로 있어도, `authorization_code`가 포함되어 있으면 문서 자체는 거부하지 않는다. authgate는 내부 `ClientModel`에 `authorization_code`와 `refresh_token`만 반영한다.
+`grant_types`에 authgate가 지원하지 않는 grant가 추가로 있어도, `authorization_code`가 포함되어 있으면 문서 자체는 거부하지 않는다. authgate는 내부 `client.Model`에 `authorization_code`와 `refresh_token`만 반영한다.
 
 authgate의 CIMD 처리:
 
@@ -310,7 +310,7 @@ authgate의 CIMD 처리:
   4. 검증:
      - client_id 필드가 fetch한 URL과 정확히 일치
      - redirect_uri가 메타데이터의 redirect_uris에 포함
-  5. 검증 성공 → 메모리에서 ClientModel 생성 → 플로우 진행
+  5. 검증 성공 → 메모리에서 client.Model 생성 → 플로우 진행
 ```
 
 ### URL-form static client_id 금지
@@ -322,7 +322,7 @@ size 검증을 전부 우회하는 고리가 생긴다. 따라서:
 
 - 정적 client_id는 비-URL 형식이어야 한다 (예: `my-app`, `mcp-cli`).
 - URL 형식 client_id를 쓰려면 정적 등록 없이 dynamic CIMD 경로로만 진입한다.
-- 위반 시 `LoadClientConfig`가 `URL-form (CIMD-shaped) client_id cannot be registered statically` 에러를 반환한다.
+- 위반 시 `client.LoadConfig`가 `URL-form (CIMD-shaped) client_id cannot be registered statically` 에러를 반환한다.
 
 CIMD가 DCR을 대체하는 이유:
 
@@ -351,7 +351,7 @@ CIMD fetch의 네트워크 제약. IETF draft에서 MUST/SHOULD인 것과 authga
 | Content-Type 검증 | IETF draft MUST | `application/json`만 허용 |
 | userinfo in URL 거부 | authgate 정책 | `https://user:pass@host/path` 형식 차단 |
 | fragment 거부 | authgate 정책 | `#` 포함 시 차단 (fragment는 서버로 전송되지 않음) |
-| query 허용 | authgate 정책 | `?` 허용. ChatGPT 등 일부 CIMD 제공자는 `?token_endpoint_auth_method=none` 같은 쿼리를 포함한 `client_id`로 요청하면서, 문서에는 쿼리 없는 URL을 `client_id`로 서빙한다. 문서 값은 fetch URL과 정확 일치하거나 fetch URL에서 쿼리만 제거한 값과 일치해야 한다(아래 검증 규칙). 캐시 key·rate limit·ClientModel 신원은 모두 요청된(쿼리 포함) `client_id`를 그대로 쓰므로 authorize/token 간 신원이 일관되고, redirect_uris는 항상 문서 소유자가 발행한 값이다 |
+| query 허용 | authgate 정책 | `?` 허용. ChatGPT 등 일부 CIMD 제공자는 `?token_endpoint_auth_method=none` 같은 쿼리를 포함한 `client_id`로 요청하면서, 문서에는 쿼리 없는 URL을 `client_id`로 서빙한다. 문서 값은 fetch URL과 정확 일치하거나 fetch URL에서 쿼리만 제거한 값과 일치해야 한다(아래 검증 규칙). 캐시 key·rate limit·client.Model 신원은 모두 요청된(쿼리 포함) `client_id`를 그대로 쓰므로 authorize/token 간 신원이 일관되고, redirect_uris는 항상 문서 소유자가 발행한 값이다 |
 
 ### CIMD 메타데이터 검증 규칙
 
@@ -360,7 +360,7 @@ CIMD fetch의 네트워크 제약. IETF draft에서 MUST/SHOULD인 것과 authga
 | `client_id` | 문서 내 값 == fetch한 URL (정확 일치), 또는 문서 내 값 == fetch한 URL에서 query만 제거한 값 (ChatGPT 호환. path 등 나머지 불일치는 거부) | `invalid_client` |
 | `client_name` | 필수, 비어있으면 거부 | `invalid_client` |
 | `redirect_uris` | 필수, 1개 이상 | `invalid_client` |
-| `grant_types` | `authorization_code` 필수. `refresh_token`은 지원하며, 그 외 grant는 authgate 내부 ClientModel에는 반영하지 않는다. 비어있으면 `authorization_code` 기본 | `invalid_client` |
+| `grant_types` | `authorization_code` 필수. `refresh_token`은 지원하며, 그 외 grant는 authgate 내부 client.Model에는 반영하지 않는다. 비어있으면 `authorization_code` 기본 | `invalid_client` |
 | `response_types` | `code`만 허용 | `invalid_client` |
 | `token_endpoint_auth_method` | `none`만 허용 (public client). 비어있으면 `none` 기본 | `invalid_client` |
 
@@ -378,7 +378,7 @@ CIMD 메타데이터 문서의 필드별 크기/개수 제한. 문서 전체 크
 | `response_types` | 최대 1개 (`code`) | 허용 값이 1종뿐 |
 | `token_endpoint_auth_method` | `none` 고정 | 허용 값이 1종뿐 |
 
-YAML 클라이언트(`clients.yaml`)도 입력 크기/개수 검증 원칙은 동일하게 적용한다. 단, 허용 grant/auth 값 집합은 채널 정책에 따라 다르며 서버 시작 시 `LoadClientConfig` 검증에서 처리한다.
+YAML 클라이언트(`clients.yaml`)도 입력 크기/개수 검증 원칙은 동일하게 적용한다. 단, 허용 grant/auth 값 집합은 채널 정책에 따라 다르며 서버 시작 시 `client.LoadConfig` 검증에서 처리한다.
 
 ### CIMD 캐시 정책
 
@@ -404,7 +404,7 @@ CIMD 메타데이터의 정적 특성과 outbound-amplification 방어를 위해
 요청 → 정규형 client_id 검증
   ├─ 비정규형 → 즉시 거부 (HTTP 호출 없음)
   └─ 정규형 → cache hit?
-       ├─ 성공 캐시 (TTL 내) → 캐시된 ClientModel 반환
+       ├─ 성공 캐시 (TTL 내) → 캐시된 client.Model 반환
        ├─ 부정 캐시 (TTL 내) → 캐시된 에러 즉시 반환 (HTTP 호출 없음)
        └─ cache miss / 만료
             → 실패 쿼터 초과? → 즉시 거부 (HTTP 호출 없음)
@@ -423,7 +423,7 @@ CIMD 클라이언트(URL 형식 client_id)는 **매 호출 시 캐시 기반으�
 /authorize
   → CIMD fetch (캐시 기반)
   → client_id 일치, redirect_uri, authorization_code 포함 확인
-  → 지원 grant만 내부 ClientModel에 반영
+  → 지원 grant만 내부 client.Model에 반영
 
 /oauth/token (code exchange)
   → CIMD fetch (캐시 기반)

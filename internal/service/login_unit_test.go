@@ -11,6 +11,7 @@ import (
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/kangheeyong/authgate/internal/upstream"
 )
@@ -25,7 +26,7 @@ type fakeLoginStore struct {
 	getUserByIDFn             func(ctx context.Context, userID string) (*storage.User, error)
 	createSessionFn           func(ctx context.Context, userID string, ttl time.Duration) (string, error)
 	getAuthRequestModelFn     func(ctx context.Context, id string) (*storage.AuthRequestModel, error)
-	resolveClientFn           func(ctx context.Context, clientID string) (*storage.ClientModel, error)
+	resolveClientFn           func(ctx context.Context, clientID string) (*oauthclient.Model, error)
 	setHostedDomainFn         func(ctx context.Context, provider, providerUserID, hostedDomain string) error
 	sessionAuthTimeFn         func(ctx context.Context, sessionID string) (time.Time, error)
 	sessionAuthTime           time.Time
@@ -215,8 +216,8 @@ func TestLogin_HandleCallback_SignupAuditLogIncludesChannel(t *testing.T) {
 		completeAuthRequestFn: func(context.Context, string, string) error {
 			return nil
 		},
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "client-a", Name: "Client A", LoginChannel: "browser"}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "client-a", Name: "Client A", LoginChannel: "browser"}, nil
 		},
 		auditLogFn: func(ctx context.Context, userID *string, eventType, ipAddress, userAgent string, metadata map[string]any) {
 			gotEvents = append(gotEvents, auditEntry{eventType: eventType, metadata: metadata})
@@ -266,8 +267,8 @@ func TestLogin_HandleLogin_RejectsCrossChannelAuthRequest(t *testing.T) {
 		getAuthRequestModelFn: func(context.Context, string) (*storage.AuthRequestModel, error) {
 			return &storage.AuthRequestModel{ID: "ar-1", ClientID: "mcp-client"}, nil
 		},
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "mcp-client", Name: "MCP Client", LoginChannel: "mcp"}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "mcp-client", Name: "MCP Client", LoginChannel: "mcp"}, nil
 		},
 		completeAuthRequestFn: func(context.Context, string, string) error {
 			t.Fatal("CompleteAuthRequest must not be called on channel mismatch")
@@ -307,8 +308,8 @@ func TestMCPLogin_HandleCallback_AuditLogIncludesSessionAndClient(t *testing.T) 
 		getAuthRequestModelFn: func(context.Context, string) (*storage.AuthRequestModel, error) {
 			return &storage.AuthRequestModel{ID: "ar-1", ClientID: "mcp-client", Resource: "http://localhost/mcp"}, nil
 		},
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "mcp-client", Name: "MCP Client", LoginChannel: "mcp"}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "mcp-client", Name: "MCP Client", LoginChannel: "mcp"}, nil
 		},
 		getUserByProviderIdentity: func(context.Context, string, string) (*storage.User, error) {
 			return &storage.User{ID: "u1", Status: "active"}, nil
@@ -366,14 +367,14 @@ func (f *fakeLoginStore) GetAuthRequestModel(ctx context.Context, id string) (*s
 	return nil, storage.ErrNotFound
 }
 
-func (f *fakeLoginStore) ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error) {
+func (f *fakeLoginStore) ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error) {
 	if f.resolveClientFn != nil {
 		return f.resolveClientFn(ctx, clientID)
 	}
 	// Default: a browser client, matching the permissive channel default the
 	// removed getClientLoginChannelFn used to provide. Tests exercising the
 	// mcp channel or a specific client name set resolveClientFn explicitly.
-	return &storage.ClientModel{ID: clientID, Name: "Test Client", LoginChannel: "browser"}, nil
+	return &oauthclient.Model{ID: clientID, Name: "Test Client", LoginChannel: "browser"}, nil
 }
 
 // promptTestStore serves one auth request with the given prompt for clientID,
@@ -401,8 +402,8 @@ func promptTestStore(t *testing.T, prompt []string, status, channel string, comp
 				Prompt:      prompt,
 			}, nil
 		},
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "client-a", Name: "Client A", LoginChannel: channel}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "client-a", Name: "Client A", LoginChannel: channel}, nil
 		},
 		recoverUserFn: func(context.Context, string) error { return nil },
 		completeAuthRequestFn: func(context.Context, string, string) error {

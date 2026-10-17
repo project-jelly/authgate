@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientaccess"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/config"
 	"github.com/kangheeyong/authgate/internal/idgen"
-	"github.com/kangheeyong/authgate/internal/storage"
 )
 
 // Storage defaults the refresh reuse grace to off, so the configured value only
@@ -42,7 +42,7 @@ func TestWarnPublicClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warnPublicClients([]storage.ClientConfigEntry{
+	warnPublicClients([]oauthclient.ConfigEntry{
 		{ClientID: "open-a"},
 		{ClientID: "explicit", Access: clientaccess.Public()},
 		{ClientID: "restricted", Access: restricted},
