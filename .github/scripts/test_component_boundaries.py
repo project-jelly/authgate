@@ -30,6 +30,13 @@ class ComponentBoundaryTests(unittest.TestCase):
         self.assertTrue((ROOT / "internal/signing/provider.go").is_file())
         self.assertEqual(internal_dependencies("signing"), set())
 
+    def test_client_only_depends_on_access_policy(self):
+        self.assertTrue((ROOT / "internal/client/model.go").is_file())
+        self.assertLessEqual(internal_dependencies("client"), {"clientaccess"})
+
+    def test_mcp_does_not_depend_on_storage(self):
+        self.assertNotIn("storage", internal_dependencies("adapter/mcp"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientaccess"
 	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/kangheeyong/authgate/internal/upstream"
@@ -221,7 +222,7 @@ func TestIntegration_ClientAccess_RefreshDeniedAfterPolicyChange(t *testing.T) {
 	}
 
 	// The operator narrows the policy (a restart with an edited clients.yaml).
-	ts.Store.LoadClients([]storage.ClientConfigEntry{RestrictedClientEntry(ts.BaseURL, mustPolicy(t,
+	ts.Store.LoadClients([]oauthclient.ConfigEntry{RestrictedClientEntry(ts.BaseURL, mustPolicy(t,
 		clientaccess.Rules{EmailDomains: []string{"example.com"}},
 		clientaccess.DenyRules{Emails: []string{"test@example.com"}},
 	))})
@@ -270,7 +271,7 @@ func TestIntegration_ClientAccess_CodeExchangeDeniedAfterPolicyChange(t *testing
 	code := completeLoginFlowToCode(t, ts, client)
 
 	// The operator deny-lists the account between the callback and the exchange.
-	ts.Store.LoadClients([]storage.ClientConfigEntry{RestrictedClientEntry(ts.BaseURL, mustPolicy(t,
+	ts.Store.LoadClients([]oauthclient.ConfigEntry{RestrictedClientEntry(ts.BaseURL, mustPolicy(t,
 		clientaccess.Rules{EmailDomains: []string{"example.com"}},
 		clientaccess.DenyRules{Emails: []string{"test@example.com"}},
 	))})
@@ -333,8 +334,8 @@ func TestIntegration_ClientAccess_DevicePollDeniedAfterPolicyChange(t *testing.T
 		t.Fatalf("approve device code: %v", err)
 	}
 
-	deviceClient := func(access *clientaccess.Policy) storage.ClientConfigEntry {
-		return storage.ClientConfigEntry{
+	deviceClient := func(access *clientaccess.Policy) oauthclient.ConfigEntry {
+		return oauthclient.ConfigEntry{
 			ClientID:          "test-client",
 			ClientType:        "public",
 			LoginChannel:      "browser",
@@ -346,7 +347,7 @@ func TestIntegration_ClientAccess_DevicePollDeniedAfterPolicyChange(t *testing.T
 		}
 	}
 	// The operator deny-lists the account after approval, before the poll.
-	ts.Store.LoadClients([]storage.ClientConfigEntry{deviceClient(mustPolicy(t,
+	ts.Store.LoadClients([]oauthclient.ConfigEntry{deviceClient(mustPolicy(t,
 		clientaccess.Rules{EmailDomains: []string{"example.com"}},
 		clientaccess.DenyRules{Emails: []string{"device-user@example.com"}},
 	))})
@@ -375,7 +376,7 @@ func TestIntegration_ClientAccess_DevicePollDeniedAfterPolicyChange(t *testing.T
 	}
 
 	// Relaxing the policy again lets the approved code be exchanged.
-	ts.Store.LoadClients([]storage.ClientConfigEntry{deviceClient(nil)})
+	ts.Store.LoadClients([]oauthclient.ConfigEntry{deviceClient(nil)})
 	if ok := pollDeviceToken(t, ts, authz.DeviceCode); ok.StatusCode != http.StatusOK || ok.AccessToken == "" {
 		t.Fatalf("device poll after relaxing the policy status=%d body=%s, want 200", ok.StatusCode, ok.RawBody)
 	}

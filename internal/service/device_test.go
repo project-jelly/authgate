@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/idgen"
 	"github.com/kangheeyong/authgate/internal/storage"
@@ -40,7 +41,7 @@ func insertDeviceCode(t *testing.T, store *storage.Storage, userCode string, clk
 	ctx := context.Background()
 	// Register the test client so audit-row metadata (#205) can carry both
 	// client_id and the human-readable client_name resolved via ResolveClient.
-	store.LoadClients([]storage.ClientConfigEntry{{ClientID: "test-client", Name: "Test Device Client", LoginChannel: "browser"}})
+	store.LoadClients([]oauthclient.ConfigEntry{{ClientID: "test-client", Name: "Test Device Client", LoginChannel: "browser"}})
 	err := store.StoreDeviceAuthorization(ctx, "test-client", "dc-"+userCode, userCode,
 		clk.Now().Add(5*time.Minute), []string{"openid"})
 	if err != nil {

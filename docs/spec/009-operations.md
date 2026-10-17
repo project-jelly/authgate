@@ -236,7 +236,7 @@ padding 없는 base64url이며, 기존 키 이관에 한해 `authgate-key-1`을 
 구 키를 공개해야 하는 기간은 그 키로 **마지막 JWT를 발급한 시각**부터 계산한다.
 access token은 `ACCESS_TOKEN_TTL` 설정값(기본 900초), ID token은 현재 1시간이다
 ([발급 코드](../../internal/storage/token_issuance.go),
-[`ClientModel.IDTokenLifetime`](../../internal/storage/models.go)).
+[`client.Model.IDTokenLifetime`](../../internal/client/model.go)).
 만료 전 access/ID token의 검증을 유지하기 위한 최소 시점은 다음과 같다.
 
 ```text

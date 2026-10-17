@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
-	"github.com/kangheeyong/authgate/internal/storage"
 )
 
 func TestCIMDFetcher_Success(t *testing.T) {
@@ -166,7 +166,7 @@ func TestIsCIMDClientID(t *testing.T) {
 		{"", false},
 	}
 	for _, tt := range tests {
-		if got := storage.IsCIMDClientID(tt.id); got != tt.want {
+		if got := oauthclient.IsCIMDClientID(tt.id); got != tt.want {
 			t.Errorf("IsCIMDClientID(%q) = %v, want %v", tt.id, got, tt.want)
 		}
 	}

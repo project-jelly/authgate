@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	mcpadapter "github.com/kangheeyong/authgate/internal/adapter/mcp"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/config"
 	"github.com/kangheeyong/authgate/internal/idgen"
@@ -89,7 +90,7 @@ func loadClientConfigIfPresent(cfg *config.Config, store *storage.Storage) []str
 		return nil
 	}
 
-	clientCfg, err := storage.LoadClientConfig(cfg.ClientConfigPath)
+	clientCfg, err := oauthclient.LoadConfig(cfg.ClientConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			slog.Warn("client config not found, skipping", "path", cfg.ClientConfigPath)
@@ -97,7 +98,7 @@ func loadClientConfigIfPresent(cfg *config.Config, store *storage.Storage) []str
 		}
 		log.Fatalf("client config: %v", err)
 	}
-	if err := storage.ValidateClientChannels(clientCfg.Clients, cfg.EnableMCP); err != nil {
+	if err := oauthclient.ValidateChannels(clientCfg.Clients, cfg.EnableMCP); err != nil {
 		log.Fatalf("client config: %v", err)
 	}
 	store.LoadClients(clientCfg.Clients)
@@ -115,7 +116,7 @@ func loadClientConfigIfPresent(cfg *config.Config, store *storage.Storage) []str
 // warnPublicClients logs each client with no access key. Such a client admits
 // every authgate account; writing "access: public" records that as intended and
 // silences the warning.
-func warnPublicClients(clients []storage.ClientConfigEntry) {
+func warnPublicClients(clients []oauthclient.ConfigEntry) {
 	for _, c := range clients {
 		if c.Access == nil {
 			slog.Warn("client has no access policy; every authgate account can use it", "client_id", c.ClientID)
@@ -136,7 +137,7 @@ func configureMCPPoliciesIfEnabled(cfg *config.Config, store *storage.Storage) {
 		log.Fatalf("MCP_CIMD_HOST_ALLOWLIST: %v", err)
 	}
 	cimdFetcher := mcpadapter.NewHTTPCIMDFetcher(hostPolicy)
-	coreResolver := storage.NewCoreClientResolutionPolicy(store)
+	coreResolver := store.CoreClientResolver()
 	// General client resolution (e.g. /authorize) may fetch CIMD documents.
 	clientPolicy := mcpadapter.NewClientResolutionPolicy(coreResolver, cimdFetcher)
 	store.SetClientResolutionPolicy(clientPolicy)
@@ -144,5 +145,5 @@ func configureMCPPoliciesIfEnabled(cfg *config.Config, store *storage.Storage) {
 	// locally-known login_channel (browser clients are always in the local
 	// registry), so give it the NON-fetching core resolver — never trigger an
 	// outbound CIMD HTTP fetch on the hot /oauth/token path.
-	store.SetResourceBindingPolicy(mcpadapter.NewResourceBindingPolicy(storage.NewCoreResourceBindingPolicy(), coreResolver))
+	store.SetResourceBindingPolicy(mcpadapter.NewResourceBindingPolicy(oauthclient.NewCoreResourceBindingPolicy(), coreResolver))
 }

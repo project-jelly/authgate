@@ -151,4 +151,8 @@ lookup과 issuance 두 callback을 모두 실행하며, grace 테스트는 confi
 인증 코어 리팩토링의 표준 조항·회귀 테스트·호환 정책·종료 기준은
 [005-token-contracts.md](005-token-contracts.md)에 연결한다.
 
-`.github/scripts/test_component_boundaries.py`는 서명 컴포넌트가 다른 내부 패키지를 참조하지 않는 경계를 검사합니다. 기존 Release Policy CI에서 실행합니다.
+`.github/scripts/test_component_boundaries.py`는 서명 컴포넌트의 독립성과 클라이언트 컴포넌트의 접근 정책 이외 내부 의존 금지, MCP 어댑터의 Storage 의존 금지를 검사합니다. 기존 Release Policy CI에서 실행합니다.
+
+`internal/client/config_test.go`는 기존 클라이언트 설정·PKCE·CIMD ID 거부 검증을 소유합니다. `internal/client/registry_test.go`는 static 조회가 외부 resolver를 호출하지 않는 경계와 resolver 복원 동작을 검증합니다.
+
+`internal/storage/client_facade_test.go`는 zero-value Storage의 레지스트리 초기화, 클라이언트 조회 오류의 Storage/OIDC 오류 변환, 동적 정책을 우회하는 core resolver를 검증합니다.

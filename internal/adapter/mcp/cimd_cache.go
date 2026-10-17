@@ -7,13 +7,13 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
-	"github.com/kangheeyong/authgate/internal/storage"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 // cimdCacheEntry is a positive (client) or negative (err) resolution cached
 // until expiresAt.
 type cimdCacheEntry struct {
-	client    *storage.ClientModel
+	client    *oauthclient.Model
 	err       error
 	expiresAt time.Time
 }
@@ -35,7 +35,7 @@ func newCIMDCache(maxEntries int) *cimdCache {
 // exists as of now. hit reports whether such an entry was found; cachedErr is
 // the cached negative result (nil for a positive hit). Expired entries are
 // removed and reported as a miss.
-func (c *cimdCache) Lookup(clientID string, now time.Time) (client *storage.ClientModel, cachedErr error, hit bool) {
+func (c *cimdCache) Lookup(clientID string, now time.Time) (client *oauthclient.Model, cachedErr error, hit bool) {
 	ce, ok := c.lru.Get(clientID)
 	if !ok {
 		return nil, nil, false
@@ -48,7 +48,7 @@ func (c *cimdCache) Lookup(clientID string, now time.Time) (client *storage.Clie
 }
 
 // PutPositive caches a successful resolution until expiresAt.
-func (c *cimdCache) PutPositive(clientID string, client *storage.ClientModel, expiresAt time.Time) {
+func (c *cimdCache) PutPositive(clientID string, client *oauthclient.Model, expiresAt time.Time) {
 	c.lru.Add(clientID, &cimdCacheEntry{client: client, expiresAt: expiresAt})
 }
 

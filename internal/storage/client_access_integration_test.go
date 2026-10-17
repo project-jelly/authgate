@@ -11,6 +11,7 @@ import (
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientaccess"
 )
 
@@ -150,7 +151,7 @@ func loadTestClientAccess(t *testing.T, s *Storage, allow clientaccess.Rules, de
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}
-	s.LoadClients([]ClientConfigEntry{{ClientID: "test-client", Name: "Test Client", LoginChannel: "browser", Access: p}})
+	s.LoadClients([]oauthclient.ConfigEntry{{ClientID: "test-client", Name: "Test Client", LoginChannel: "browser", Access: p}})
 }
 
 func assertInvalidGrant(t *testing.T, err error) {

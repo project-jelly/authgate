@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/storage"
 )
 
@@ -19,7 +20,7 @@ import (
 // MCP clients a resolve may trigger an outbound CIMD fetch, so collapsing the
 // lookups avoids a duplicate fetch per login (#302 M2). The client is non-nil
 // whenever errMsg is empty.
-func verifyAuthRequestChannel(ctx context.Context, store LoginStore, authReq *storage.AuthRequestModel, expected, ipAddress, userAgent string, userID *string) (client *storage.ClientModel, errMsg string, statusCode int) {
+func verifyAuthRequestChannel(ctx context.Context, store LoginStore, authReq *storage.AuthRequestModel, expected, ipAddress, userAgent string, userID *string) (client *oauthclient.Model, errMsg string, statusCode int) {
 	client, err := store.ResolveClient(ctx, authReq.ClientID)
 	if err != nil || client == nil {
 		return nil, "internal_error", http.StatusInternalServerError

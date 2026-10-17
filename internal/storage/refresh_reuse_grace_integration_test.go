@@ -13,6 +13,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientinfo"
 	"github.com/kangheeyong/authgate/internal/clock"
 )
@@ -35,7 +36,7 @@ func newGraceFixture(t *testing.T, grace time.Duration) (*graceFixture, string) 
 	store, clk, gen := newTombstoneStore(t)
 	store.SetRefreshReuseGrace(grace)
 	secretHash := "fixture-only"
-	store.LoadClients([]ClientConfigEntry{{ClientID: "test-client", ClientType: "confidential", ClientSecretHash: &secretHash}})
+	store.LoadClients([]oauthclient.ConfigEntry{{ClientID: "test-client", ClientType: "confidential", ClientSecretHash: &secretHash}})
 	ctx := context.Background()
 
 	user, err := store.CreateUserWithIdentity(ctx, CreateUserWithIdentityInput{

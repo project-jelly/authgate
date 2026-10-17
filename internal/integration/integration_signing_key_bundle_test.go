@@ -21,8 +21,9 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
-	"github.com/kangheeyong/authgate/internal/storage"
 	"golang.org/x/crypto/bcrypt"
+
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 // The files contain only keys generated for this test. Each setup loads the
@@ -160,7 +161,7 @@ func TestIntegration_SigningKeyBundle_GrantsAndRotationBoundaries(t *testing.T) 
 		{"retired", retired, false},
 		{"removed", removed, false},
 	} {
-		node.server.Store.LoadClients([]storage.ClientConfigEntry{{
+		node.server.Store.LoadClients([]oauthclient.ConfigEntry{{
 			ClientID: "test-client", ClientType: "confidential", ClientSecretHash: &secretHash,
 		}})
 		t.Run(node.name+"_introspection", func(t *testing.T) {

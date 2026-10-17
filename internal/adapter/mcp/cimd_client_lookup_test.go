@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/idgen"
 	"github.com/kangheeyong/authgate/internal/storage"
@@ -20,7 +21,7 @@ func newStoreForClientLookup() *storage.Storage {
 
 func TestGetClientByClientID_YAML(t *testing.T) {
 	store := newStoreForClientLookup()
-	store.LoadClients([]storage.ClientConfigEntry{{
+	store.LoadClients([]oauthclient.ConfigEntry{{
 		ClientID:          "my-app",
 		ClientType:        "public",
 		LoginChannel:      "browser",
@@ -65,7 +66,7 @@ func TestGetClientByClientID_CIMD(t *testing.T) {
 
 	store := newStoreForClientLookup()
 	fetcher := &HTTPCIMDFetcher{hosts: anyCIMDHost, client: srv.Client(), clock: clock.RealClock{}, cacheTTL: 5 * time.Minute}
-	store.SetClientResolutionPolicy(NewClientResolutionPolicy(storage.NewCoreClientResolutionPolicy(store), fetcher))
+	store.SetClientResolutionPolicy(NewClientResolutionPolicy(store.CoreClientResolver(), fetcher))
 
 	clientID := serverURL + "/oauth/client.json"
 	client, err := store.GetClientByClientID(context.Background(), clientID)

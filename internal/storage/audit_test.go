@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientinfo"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/idgen"
@@ -252,7 +253,7 @@ func TestAuditDeviceCodeIssued(t *testing.T) {
 	db := testutil.SetupPostgres(t)
 	clk := &clock.FixedClock{T: time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC)}
 	store := withTestKeys(t, New(db, clk, idgen.CryptoGenerator{}, func(user *User) error { return nil }, 15*time.Minute, 30*24*time.Hour))
-	store.LoadClients([]ClientConfigEntry{{
+	store.LoadClients([]oauthclient.ConfigEntry{{
 		ClientID: "device-client",
 		Name:     "Device Client",
 	}})

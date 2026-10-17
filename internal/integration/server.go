@@ -15,6 +15,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/op"
 
 	mcpadapter "github.com/kangheeyong/authgate/internal/adapter/mcp"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientaccess"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/crypto"
@@ -139,9 +140,9 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 			t.Fatalf("cimd host policy: %v", err)
 		}
 		cimdFetcher := mcpadapter.NewHTTPCIMDFetcher(hostPolicy)
-		clientPolicy := mcpadapter.NewClientResolutionPolicy(storage.NewCoreClientResolutionPolicy(store), cimdFetcher)
+		clientPolicy := mcpadapter.NewClientResolutionPolicy(store.CoreClientResolver(), cimdFetcher)
 		store.SetClientResolutionPolicy(clientPolicy)
-		store.SetResourceBindingPolicy(mcpadapter.NewResourceBindingPolicy(storage.NewCoreResourceBindingPolicy(), clientPolicy))
+		store.SetResourceBindingPolicy(mcpadapter.NewResourceBindingPolicy(oauthclient.NewCoreResourceBindingPolicy(), clientPolicy))
 	}
 
 	if opts.SigningKeyBundlePath != "" {
@@ -169,7 +170,7 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 	}
 
 	// Register test clients in memory
-	store.LoadClients([]storage.ClientConfigEntry{
+	store.LoadClients([]oauthclient.ConfigEntry{
 		{
 			ClientID:                 "test-client",
 			ClientType:               "public",
@@ -196,10 +197,10 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		},
 	})
 	if opts.RestrictedClientAccess != nil {
-		store.LoadClients([]storage.ClientConfigEntry{RestrictedClientEntry(srv.URL, opts.RestrictedClientAccess)})
+		store.LoadClients([]oauthclient.ConfigEntry{RestrictedClientEntry(srv.URL, opts.RestrictedClientAccess)})
 	}
 	if opts.EnableMCP {
-		store.LoadClients([]storage.ClientConfigEntry{
+		store.LoadClients([]oauthclient.ConfigEntry{
 			{
 				ClientID:          "mcp-client",
 				ClientType:        "public",
@@ -328,7 +329,7 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 		}
 		if err := r.ParseForm(); err == nil {
 			clientID := strings.TrimSpace(r.Form.Get("client_id"))
-			if storage.IsCIMDClientID(clientID) {
+			if oauthclient.IsCIMDClientID(clientID) {
 				if _, err := store.GetClientByClientID(r.Context(), clientID); err != nil {
 					w.WriteHeader(http.StatusOK)
 					return
@@ -371,8 +372,8 @@ func SetupTestServerWithOptions(t *testing.T, opts SetupOptions) *TestServer {
 // RestrictedClientEntry is the registration of RestrictedClientID with the
 // given access policy. Loading it again with another policy stands in for a
 // restart with an edited clients.yaml.
-func RestrictedClientEntry(baseURL string, access *clientaccess.Policy) storage.ClientConfigEntry {
-	return storage.ClientConfigEntry{
+func RestrictedClientEntry(baseURL string, access *clientaccess.Policy) oauthclient.ConfigEntry {
+	return oauthclient.ConfigEntry{
 		ClientID:          RestrictedClientID,
 		ClientType:        "public",
 		LoginChannel:      "browser",

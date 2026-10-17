@@ -1,4 +1,4 @@
-package storage
+package client
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 // CIMDFetcher fetches and validates CIMD (Client ID Metadata Document) clients.
 type CIMDFetcher interface {
-	FetchClient(ctx context.Context, clientID string) (*ClientModel, error)
+	FetchClient(ctx context.Context, clientID string) (*Model, error)
 }
 
 func isCIMDClientID(clientID string) bool {
