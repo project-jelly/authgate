@@ -10,6 +10,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/op"
 	"golang.org/x/time/rate"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/config"
 	"github.com/kangheeyong/authgate/internal/handler"
 	"github.com/kangheeyong/authgate/internal/middleware"
@@ -85,7 +86,7 @@ func registerProviderRoutes(mux *http.ServeMux, cfg *config.Config, store *stora
 		}
 		if err := r.ParseForm(); err == nil {
 			clientID := strings.TrimSpace(r.Form.Get("client_id"))
-			if storage.IsCIMDClientID(clientID) {
+			if oauthclient.IsCIMDClientID(clientID) {
 				if _, err := store.GetClientByClientID(r.Context(), clientID); err != nil {
 					w.WriteHeader(http.StatusOK)
 					return

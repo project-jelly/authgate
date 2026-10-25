@@ -80,7 +80,7 @@ func (s *Storage) validateRefreshTokenRequest(ctx context.Context, tx *sql.Tx, r
 	// The client's access policy is re-evaluated on every refresh so removing
 	// an account from it takes effect within one access-token lifetime, not
 	// only at the next interactive login.
-	access := s.ensureRegistry().staticAccess(rt.ClientID)
+	access := s.ensureRegistry().StaticAccess(rt.ClientID)
 	if s.stateChecker == nil && !access.Restricted() {
 		return nil
 	}

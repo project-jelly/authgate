@@ -13,8 +13,9 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
-	"github.com/kangheeyong/authgate/internal/storage"
 	"golang.org/x/crypto/bcrypt"
+
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 func userinfoRequest(t *testing.T, ts *TestServer, token string) (int, map[string]any) {
@@ -183,7 +184,7 @@ func TestIntegration_IntrospectionRequiresAccessTokenAndOwningClient(t *testing.
 		t.Fatal(err)
 	}
 	secretHash := string(hash)
-	ts.Store.LoadClients([]storage.ClientConfigEntry{
+	ts.Store.LoadClients([]oauthclient.ConfigEntry{
 		{ClientID: c.ClientID, ClientType: "confidential", ClientSecretHash: &secretHash},
 		{ClientID: "observer", ClientType: "confidential", ClientSecretHash: &secretHash},
 	})

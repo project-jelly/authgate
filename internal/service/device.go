@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientinfo"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/storage"
@@ -31,7 +32,7 @@ type DeviceStore interface {
 	ApproveDeviceCode(ctx context.Context, userCode, subject string, authTime time.Time) error
 	// SessionAuthTime is when the session's owner last authenticated upstream.
 	SessionAuthTime(ctx context.Context, sessionID string) (time.Time, error)
-	ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error)
+	ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error)
 	SetIdentityHostedDomain(ctx context.Context, provider, providerUserID, hostedDomain string) error
 }
 

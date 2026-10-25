@@ -9,8 +9,8 @@
 
 | 경계 | 현재 근거 | 설계 영향 |
 |------|-----------|-----------|
-| 시작 시 키 로드 | [`app/storage_wiring.go`](../../internal/app/storage_wiring.go), [`storage/keys.go`](../../internal/storage/keys.go) | provider 생성 전에 묶음 전체를 검증한다. |
-| JWT 서명·JWKS | [`signing_key_provider.go`](../../internal/storage/signing_key_provider.go), [`storage_oidc_device.go`](../../internal/storage/storage_oidc_device.go) | 기존 `op.Storage` 인터페이스를 유지한다. |
+| 시작 시 키 로드 | [`app/storage_wiring.go`](../../internal/app/storage_wiring.go), [`signing/pem.go`](../../internal/signing/pem.go) | provider 생성 전에 묶음 전체를 검증한다. |
+| JWT 서명·JWKS | [`signing/provider.go`](../../internal/signing/provider.go), [`storage_oidc_device.go`](../../internal/storage/storage_oidc_device.go) | 기존 `op.Storage` 인터페이스를 유지한다. |
 | access token 재서명과 ID token `at_hash` 보정 | [`middleware/access_token_typ.go`](../../internal/middleware/access_token_typ.go) | provider 발급과 응답 보정이 별도로 키를 조회하므로 실행 중 키 교체를 하지 않는다. |
 | hint 검증 | zitadel `WithIDTokenHintKeySet`, authorize와 [`handler/logout.go`](../../internal/handler/logout.go) | 별도 public-only `oidc.KeySet`을 provider 생성 시 주입한다. |
 | 키 보관·배포 | Osaka Vault → ESO → Secret → read-only `subPath` mount, Reloader | 파일 watcher 대신 새 묶음으로 Pod를 교체한다. 앱에 쓰기 권한을 추가하지 않는다. |
@@ -73,7 +73,7 @@ hint 이력을 누락하지 않는다. 최초 legacy 이관은 현재 JWKS가 �
 이 검사는 stateless startup parser가 대신할 수 없다. 유출 사고의 키 제거는 명시적
 예외로 기록하고, 이후 변경·롤백에서도 해당 ID/fingerprint를 다시 넣지 않는다.
 
-`storage`는 입력 DTO를 검증한 뒤 active `*rsa.PrivateKey`와 불변의
+`signing`은 입력 DTO를 검증한 뒤 active `*rsa.PrivateKey`와 불변의
 `*rsa.PublicKey` 목록을 갖는다. `KeySet()`에 private key가 들어갈 수 없게 별도
 타입을 사용한다. zitadel JWKS handler는 전달받은 `Key()`를 그대로 직렬화하므로
 serializer가 private 필드를 알아서 제거한다고 가정하면 안 된다.
@@ -85,8 +85,8 @@ serializer가 private 필드를 알아서 제거한다고 가정하면 안 된�
 | 위치 | 구현 책임 |
 |------|-------------|
 | `config` | 경로 선택 및 상충 설정 검사 |
-| `storage/keys.go` 또는 같은 패키지의 bundle 파일 | 제한 있는 단일 읽기, 엄격한 JSON/PEM/JWK 검증 |
-| `storage/signing_key_provider.go` | active private + published/all public 키 목록. 시작 시 한 번 구성하고 setter는 실행 중 호출하지 않는다. |
+| `signing/pem.go`, `signing/bundle.go` | 제한 있는 단일 읽기, 엄격한 JSON/PEM/JWK 검증 |
+| `signing/provider.go` | active private + published/all public 키 목록. 시작 시 한 번 구성하고 setter는 실행 중 호출하지 않는다. |
 | `app/storage_wiring.go` | legacy/bundle 선택. 검증 실패 시 서버를 열기 전에 종료 |
 | `app/oidc.go` | hint 전용 `oidc.KeySet`을 `WithIDTokenHintKeySet`으로 연결하고 RS256을 명시적으로 제한 |
 

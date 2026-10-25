@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/kangheeyong/authgate/internal/upstream"
@@ -19,7 +20,7 @@ type fakeDeviceStore struct {
 	createSessionFn           func(ctx context.Context, userID string, ttl time.Duration) (string, error)
 	denyDeviceCodeFn          func(ctx context.Context, userCode string) error
 	approveDeviceCodeFn       func(ctx context.Context, userCode, subject string) error
-	resolveClientFn           func(ctx context.Context, clientID string) (*storage.ClientModel, error)
+	resolveClientFn           func(ctx context.Context, clientID string) (*oauthclient.Model, error)
 	setHostedDomainFn         func(ctx context.Context, provider, providerUserID, hostedDomain string) error
 	sessionAuthTime           time.Time
 	sessionAuthTimeErr        error
@@ -79,7 +80,7 @@ func (f *fakeDeviceStore) SessionAuthTime(ctx context.Context, sessionID string)
 	return f.sessionAuthTime, nil
 }
 
-func (f *fakeDeviceStore) ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error) {
+func (f *fakeDeviceStore) ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error) {
 	if f.resolveClientFn != nil {
 		return f.resolveClientFn(ctx, clientID)
 	}
@@ -338,8 +339,8 @@ func TestDevice_Approve_AuthTimeIsTheSessionsOwn(t *testing.T) {
 			return &storage.DeviceCodeModel{UserCode: "UCODE", ClientID: "test-client", State: "pending"}, nil
 		},
 		approveDeviceCodeFn: func(context.Context, string, string) error { return nil },
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "test-client", Name: "Test Client", LoginChannel: "browser"}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "test-client", Name: "Test Client", LoginChannel: "browser"}, nil
 		},
 	}
 	store.sessionAuthTime = signedInAt

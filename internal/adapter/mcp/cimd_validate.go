@@ -6,17 +6,17 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kangheeyong/authgate/internal/storage"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 // validateCIMDMetadata parses a fetched CIMD document body and validates it
-// against the requested clientID, returning the resolved public ClientModel.
+// against the requested clientID, returning the resolved public client.Model.
 //
 // It is intentionally pure — no HTTP, cache or rate-limit machinery — so the
 // CIMD schema/validation rules can be unit-tested in isolation (#303). The
 // caller (HTTPCIMDFetcher.fetchAndValidate) owns the network fetch, size/
 // content-type limits and cache-TTL derivation.
-func validateCIMDMetadata(body []byte, clientID string) (*storage.ClientModel, error) {
+func validateCIMDMetadata(body []byte, clientID string) (*oauthclient.Model, error) {
 	var meta CIMDMetadata
 	if err := json.Unmarshal(body, &meta); err != nil {
 		return nil, fmt.Errorf("cimd: invalid JSON: %w", err)
@@ -27,7 +27,7 @@ func validateCIMDMetadata(body []byte, clientID string) (*storage.ClientModel, e
 	// ?token_endpoint_auth_method=none) while its document publishes the URL
 	// without the query — accept when the document value equals the fetch URL
 	// minus its query. The requested client_id stays the identity everywhere
-	// (cache key, rate limit, ClientModel.ID), so authorize/token remain
+	// (cache key, rate limit, client.Model.ID), so authorize/token remain
 	// consistent and no alias gains a different redirect_uris set than the
 	// document owner published.
 	if meta.ClientID != clientID && meta.ClientID != stripCIMDQuery(clientID) {
@@ -80,14 +80,14 @@ func validateCIMDMetadata(body []byte, clientID string) (*storage.ClientModel, e
 	if len(meta.ResponseTypes) > maxCIMDResponseTypeCount {
 		return nil, fmt.Errorf("cimd: response_types exceeds %d entries", maxCIMDResponseTypeCount)
 	}
-	return &storage.ClientModel{
+	return &oauthclient.Model{
 		ID:                   clientID,
 		Type:                 "public",
 		LoginChannel:         "mcp",
 		Name:                 meta.ClientName,
-		RedirectURIList:      storage.StringArray(meta.RedirectURIs),
-		AllowedScopeList:     storage.StringArray([]string{"openid", "profile", "email", "offline_access"}),
-		AllowedGrantTypeList: storage.StringArray(grantTypes),
+		RedirectURIList:      meta.RedirectURIs,
+		AllowedScopeList:     []string{"openid", "profile", "email", "offline_access"},
+		AllowedGrantTypeList: grantTypes,
 	}, nil
 }
 

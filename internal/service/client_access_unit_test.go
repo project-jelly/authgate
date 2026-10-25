@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientaccess"
 	"github.com/kangheeyong/authgate/internal/clock"
 	"github.com/kangheeyong/authgate/internal/storage"
@@ -71,8 +72,8 @@ func newAccessHarness(t *testing.T, channel string, prompt []string, policy *cli
 				Prompt:      prompt,
 			}, nil
 		},
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "client-a", Name: "Client A", LoginChannel: channel, Access: policy}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "client-a", Name: "Client A", LoginChannel: channel, Access: policy}, nil
 		},
 		getUserByProviderIdentity: func(context.Context, string, string) (*storage.User, error) {
 			if identityUser == nil {
@@ -400,8 +401,8 @@ func deviceAccessStore(t *testing.T, policy *clientaccess.Policy, user *storage.
 		getDeviceCodeByUserCodeFn: func(context.Context, string) (*storage.DeviceCodeModel, error) {
 			return &storage.DeviceCodeModel{UserCode: "UCODE", ClientID: "client-a", State: "pending"}, nil
 		},
-		resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-			return &storage.ClientModel{ID: "client-a", Name: "Client A", Access: policy}, nil
+		resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+			return &oauthclient.Model{ID: "client-a", Name: "Client A", Access: policy}, nil
 		},
 		approveDeviceCodeFn: func(context.Context, string, string) error {
 			*approved = true
@@ -521,8 +522,8 @@ func TestClientAccess_CallbacksEvaluateUpstreamEmail(t *testing.T) {
 					u := *stored
 					return &u, nil
 				},
-				resolveClientFn: func(context.Context, string) (*storage.ClientModel, error) {
-					return &storage.ClientModel{ID: "client-a", Name: "Client A", Access: policy}, nil
+				resolveClientFn: func(context.Context, string) (*oauthclient.Model, error) {
+					return &oauthclient.Model{ID: "client-a", Name: "Client A", Access: policy}, nil
 				},
 				createSessionFn: func(context.Context, string, time.Duration) (string, error) {
 					sessions++

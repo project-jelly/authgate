@@ -10,6 +10,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/db/storeq"
 )
 
@@ -137,7 +138,7 @@ func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 	// client are not facts to hand an unauthenticated caller. The reason is
 	// kept server-side, in the log line and in the auth.access_denied audit
 	// row.
-	access := s.ensureRegistry().staticAccess(ar.ClientID)
+	access := s.ensureRegistry().StaticAccess(ar.ClientID)
 	if (s.stateChecker != nil || access.Restricted()) && ar.Subject != nil && *ar.Subject != "" {
 		user, err := s.GetUserByID(ctx, *ar.Subject)
 		if err != nil {
@@ -150,7 +151,7 @@ func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 				return nil, oidc.ErrInvalidGrant()
 			}
 		}
-		if err := s.enforceStaticClientAccess(ctx, access, ar.ClientID, s.ensureRegistry().staticLoginChannel(ar.ClientID), user); err != nil {
+		if err := s.enforceStaticClientAccess(ctx, access, ar.ClientID, s.ensureRegistry().StaticLoginChannel(ar.ClientID), user); err != nil {
 			slog.WarnContext(ctx, "code exchange refused: client access policy", "client_id", ar.ClientID)
 			return nil, oidc.ErrInvalidGrant()
 		}
@@ -260,7 +261,7 @@ func maxAgeFromNullInt64(v sql.NullInt64) *uint {
 // The auth_request is bound to client_id "test-app" (registered with
 // login_channel="browser" so the channel-binding guard accepts it).
 func (s *Storage) CreateTestAuthRequest(ctx context.Context, label string) (string, error) {
-	s.LoadClients([]ClientConfigEntry{{ClientID: "test-app", Name: "Test App", LoginChannel: "browser"}})
+	s.LoadClients([]oauthclient.ConfigEntry{{ClientID: "test-app", Name: "Test App", LoginChannel: "browser"}})
 	id := s.idgen.NewUUID()
 	err := storeq.New(s.db).InsertTestAuthRequest(ctx, storeq.InsertTestAuthRequestParams{
 		ID:        id,
@@ -277,7 +278,7 @@ func (s *Storage) CreateTestAuthRequest(ctx context.Context, label string) (stri
 // The auth_request is bound to client_id "test-mcp-app" (registered with
 // login_channel="mcp" so the channel-binding guard accepts it).
 func (s *Storage) CreateTestAuthRequestWithResource(ctx context.Context, label, resource string) (string, error) {
-	s.LoadClients([]ClientConfigEntry{{ClientID: "test-mcp-app", Name: "Test MCP App", LoginChannel: "mcp"}})
+	s.LoadClients([]oauthclient.ConfigEntry{{ClientID: "test-mcp-app", Name: "Test MCP App", LoginChannel: "mcp"}})
 	id := s.idgen.NewUUID()
 	now := s.clock.Now()
 	err := storeq.New(s.db).InsertTestAuthRequestWithResource(ctx, storeq.InsertTestAuthRequestWithResourceParams{

@@ -7,25 +7,25 @@ import (
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 
-	"github.com/kangheeyong/authgate/internal/storage"
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 )
 
 type fakeClientPolicy struct {
-	client *storage.ClientModel
+	client *oauthclient.Model
 	err    error
 }
 
-func (f fakeClientPolicy) ResolveClient(ctx context.Context, clientID string) (*storage.ClientModel, error) {
+func (f fakeClientPolicy) ResolveClient(ctx context.Context, clientID string) (*oauthclient.Model, error) {
 	return f.client, f.err
 }
 
 type fakeFetcher struct {
-	client *storage.ClientModel
+	client *oauthclient.Model
 	err    error
 	calls  int
 }
 
-func (f *fakeFetcher) FetchClient(ctx context.Context, clientID string) (*storage.ClientModel, error) {
+func (f *fakeFetcher) FetchClient(ctx context.Context, clientID string) (*oauthclient.Model, error) {
 	f.calls++
 	return f.client, f.err
 }
@@ -37,7 +37,7 @@ type fakeResourcePolicy struct {
 	tokenCalls   int
 }
 
-func (f *fakeResourcePolicy) ValidateAuthorizeRequest(ctx context.Context, client *storage.ClientModel, requestResource string) error {
+func (f *fakeResourcePolicy) ValidateAuthorizeRequest(ctx context.Context, client *oauthclient.Model, requestResource string) error {
 	f.authCalls++
 	return f.authorizeErr
 }
@@ -48,8 +48,8 @@ func (f *fakeResourcePolicy) ValidateTokenRequest(ctx context.Context, clientID,
 }
 
 func TestClientResolutionPolicy_UsesBaseFirst(t *testing.T) {
-	baseClient := &storage.ClientModel{ID: "my-app"}
-	fetcher := &fakeFetcher{client: &storage.ClientModel{ID: "fetched"}}
+	baseClient := &oauthclient.Model{ID: "my-app"}
+	fetcher := &fakeFetcher{client: &oauthclient.Model{ID: "fetched"}}
 	p := NewClientResolutionPolicy(fakeClientPolicy{client: baseClient}, fetcher)
 
 	client, err := p.ResolveClient(context.Background(), "my-app")
@@ -65,8 +65,8 @@ func TestClientResolutionPolicy_UsesBaseFirst(t *testing.T) {
 }
 
 func TestClientResolutionPolicy_FallsBackToCIMD(t *testing.T) {
-	fetcher := &fakeFetcher{client: &storage.ClientModel{ID: "https://mcp.example.com/client.json"}}
-	p := NewClientResolutionPolicy(fakeClientPolicy{err: storage.ErrNotFound}, fetcher)
+	fetcher := &fakeFetcher{client: &oauthclient.Model{ID: "https://mcp.example.com/client.json"}}
+	p := NewClientResolutionPolicy(fakeClientPolicy{err: oauthclient.ErrNotFound}, fetcher)
 
 	clientID := "https://mcp.example.com/client.json"
 	client, err := p.ResolveClient(context.Background(), clientID)
@@ -82,11 +82,11 @@ func TestClientResolutionPolicy_FallsBackToCIMD(t *testing.T) {
 }
 
 func TestClientResolutionPolicy_NoFallbackForNonCIMD(t *testing.T) {
-	fetcher := &fakeFetcher{client: &storage.ClientModel{ID: "fetched"}}
-	p := NewClientResolutionPolicy(fakeClientPolicy{err: storage.ErrNotFound}, fetcher)
+	fetcher := &fakeFetcher{client: &oauthclient.Model{ID: "fetched"}}
+	p := NewClientResolutionPolicy(fakeClientPolicy{err: oauthclient.ErrNotFound}, fetcher)
 
 	_, err := p.ResolveClient(context.Background(), "my-app")
-	if !errors.Is(err, storage.ErrNotFound) {
+	if !errors.Is(err, oauthclient.ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 	if fetcher.calls != 0 {
@@ -98,7 +98,7 @@ func TestResourceBindingPolicy_EnforcesMCPResource(t *testing.T) {
 	base := &fakeResourcePolicy{}
 	p := NewResourceBindingPolicy(base, nil)
 
-	err := p.ValidateAuthorizeRequest(context.Background(), &storage.ClientModel{LoginChannel: "mcp"}, "")
+	err := p.ValidateAuthorizeRequest(context.Background(), &oauthclient.Model{LoginChannel: "mcp"}, "")
 	if err == nil {
 		t.Fatal("expected invalid_target error")
 	}
@@ -116,7 +116,7 @@ func TestResourceBindingPolicy_DelegatesToBase(t *testing.T) {
 	base := &fakeResourcePolicy{authorizeErr: wantErr}
 	p := NewResourceBindingPolicy(base, nil)
 
-	err := p.ValidateAuthorizeRequest(context.Background(), &storage.ClientModel{LoginChannel: "browser"}, "")
+	err := p.ValidateAuthorizeRequest(context.Background(), &oauthclient.Model{LoginChannel: "browser"}, "")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("error = %v, want %v", err, wantErr)
 	}
@@ -133,7 +133,7 @@ func TestResourceBindingPolicy_RejectsResourceForBrowserClient(t *testing.T) {
 	base := &fakeResourcePolicy{}
 	p := NewResourceBindingPolicy(base, nil)
 
-	err := p.ValidateAuthorizeRequest(context.Background(), &storage.ClientModel{LoginChannel: "browser"}, "https://mcp.example.com/resource")
+	err := p.ValidateAuthorizeRequest(context.Background(), &oauthclient.Model{LoginChannel: "browser"}, "https://mcp.example.com/resource")
 	if err == nil {
 		t.Fatal("expected invalid_target for browser client with resource")
 	}
@@ -152,7 +152,7 @@ func TestResourceBindingPolicy_RejectsResourceForBrowserClient(t *testing.T) {
 // invalid_grant when the resolver reports a non-MCP login_channel.
 func TestResourceBindingPolicy_RejectsLegacyStoredResourceOnNonMCPClient(t *testing.T) {
 	base := &fakeResourcePolicy{}
-	resolver := fakeClientPolicy{client: &storage.ClientModel{ID: "browser-app", LoginChannel: "browser"}}
+	resolver := fakeClientPolicy{client: &oauthclient.Model{ID: "browser-app", LoginChannel: "browser"}}
 	p := NewResourceBindingPolicy(base, resolver)
 
 	err := p.ValidateTokenRequest(context.Background(), "browser-app", "https://mcp.example.com/resource", "")

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kangheeyong/authgate/internal/clock"
-	"github.com/kangheeyong/authgate/internal/storage"
 )
 
 func TestCIMDFetcher_UnsupportedAuthMethod(t *testing.T) {
@@ -130,7 +129,7 @@ func TestCIMDFetcher_IgnoresUnsupportedAdditionalGrantTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchClient failed: %v", err)
 	}
-	want := storage.StringArray([]string{"authorization_code", "refresh_token"})
+	want := []string{"authorization_code", "refresh_token"}
 	if !reflect.DeepEqual(client.AllowedGrantTypeList, want) {
 		t.Fatalf("grant_types = %v, want %v", client.AllowedGrantTypeList, want)
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/kangheeyong/authgate/internal/upstream"
 )
@@ -74,7 +75,7 @@ func (s *LoginService) CompleteBrowserLogin(ctx context.Context, state string, i
 // recovery, so a refused login neither masks a disabled account nor cancels a
 // pending deletion. Both evaluate what the IdP just asserted, not the email
 // stored at signup, which nothing updates.
-func (s *LoginService) prepareBrowserCallbackUser(ctx context.Context, userInfo *upstream.UserInfo, authReq *storage.AuthRequestModel, client *storage.ClientModel, ipAddress, userAgent string) (*storage.User, bool, bool, *CallbackResult) {
+func (s *LoginService) prepareBrowserCallbackUser(ctx context.Context, userInfo *upstream.UserInfo, authReq *storage.AuthRequestModel, client *oauthclient.Model, ipAddress, userAgent string) (*storage.User, bool, bool, *CallbackResult) {
 	providerName := s.providerName
 	user, err := s.store.GetUserByProviderIdentity(ctx, providerName, userInfo.Sub)
 	if errors.Is(err, storage.ErrNotFound) {

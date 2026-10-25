@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	oauthclient "github.com/kangheeyong/authgate/internal/client"
 	"github.com/kangheeyong/authgate/internal/clientaccess"
 	"github.com/kangheeyong/authgate/internal/storage"
 	"github.com/kangheeyong/authgate/internal/upstream"
@@ -13,7 +14,7 @@ import (
 // when it refuses, writes one auth.access_denied row. userID is nil for a
 // refused signup, where no account exists. It returns whether access is
 // allowed. A client without a policy allows everyone and writes nothing.
-func checkClientAccess(ctx context.Context, store clientAuditor, client *storage.ClientModel, channel string, userID *string, subject clientaccess.Subject, signup bool, ipAddress, userAgent string) bool {
+func checkClientAccess(ctx context.Context, store clientAuditor, client *oauthclient.Model, channel string, userID *string, subject clientaccess.Subject, signup bool, ipAddress, userAgent string) bool {
 	decision := client.Access.Evaluate(subject)
 	if decision.Allowed {
 		return true
@@ -31,7 +32,7 @@ func checkClientAccess(ctx context.Context, store clientAuditor, client *storage
 // alone would create a session and a code the exchange then refuses. The fresh
 // claims are evaluated first so that, when both fail, the audit row describes
 // what the IdP says now. One refusal writes one auth.access_denied row.
-func checkExistingAccountAccess(ctx context.Context, store clientAuditor, client *storage.ClientModel, channel string, user *storage.User, info *upstream.UserInfo, ipAddress, userAgent string) bool {
+func checkExistingAccountAccess(ctx context.Context, store clientAuditor, client *oauthclient.Model, channel string, user *storage.User, info *upstream.UserInfo, ipAddress, userAgent string) bool {
 	return checkClientAccess(ctx, store, client, channel, &user.ID, accessSubjectFromUpstream(info), false, ipAddress, userAgent) &&
 		checkClientAccess(ctx, store, client, channel, &user.ID, storage.AccessSubject(user), false, ipAddress, userAgent)
 }
