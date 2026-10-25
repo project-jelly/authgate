@@ -571,6 +571,9 @@ Go 모듈의 최소 패치 버전과 두 Docker builder를 함께 고정해 CI�
 생성하고, 미지원 `code_challenge_method`를 요청 저장 전에 거부한다.
 Storage의 S256 요구와 confidential Browser의 `skip_pkce` 호환 검사는 유지한다.
 오류 코드는 `invalid_request`이며 provider가 설명 문구를 소유한다.
+`go-chi/chi v5.4.0`은 `ClientIPFromXFF`의 직접 연결 peer 검증을 보완한다
+(GHSA-j6qf-3m9c-vwj3). AuthGate는 해당 함수를 사용하지 않으며, 자체
+`clientinfo`의 trusted-proxy 검증과 감사 IP 정책을 유지한다.
 `go-jose v4.1.6`부터 RSA JWK의 modulus는 최대 4096비트다. 상위 IdP의 JWKS와
 수동으로 제공하는 서명 키를 교체할 때 이 제한과의 호환성을 확인한다.
 
