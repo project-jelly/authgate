@@ -70,7 +70,7 @@ func registerProviderRoutes(mux *http.ServeMux, cfg *config.Config, store *stora
 	})
 	mux.Handle("/authorize", authLimiter(middleware.AuthorizationResponseIssuer(cfg.PublicURL, authorize)))
 	mux.Handle("/authorize/callback", middleware.AuthorizationResponseIssuer(cfg.PublicURL, provider))
-	tokenWithAtJWT := storage.WrapAccessTokenJWTType(provider, store)
+	tokenWithAtJWT := middleware.WrapAccessTokenJWTType(provider, store)
 	mux.Handle("/oauth/token", middleware.NoStore(tokenLimiter(middleware.TokenLogContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resource, err := storage.ResourceFromRequestStrict(r)
 		if err != nil {
