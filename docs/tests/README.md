@@ -63,6 +63,8 @@ S256 요구와 confidential Browser의 `skip_pkce` 호환을 실제 authorize HT
 challenge가 있는 알 수 없는 method(`S512`, `s256`, `PLAIN`)는 `invalid_request`와
 저장 0건을 확인하고, 면제 클라이언트의 PKCE 없음·명시적/암묵적 plain·method만 있는
 기존 요청은 채널별 로그인 redirect와 저장 값으로 확인한다.
+거부 응답은 `error`·`state`·`iss`와 미저장 계약을 고정하고, 제공자 소유의
+`error_description`은 method 관련 사유와 요청 값의 미반영을 확인한다.
 
 `internal/storage/signing_key_bundle_test.go`는 bounded strict JSON/PEM/RSA/JWK 검증,
 중복 ID·키 재료, active 일치, 공개 키 전용 반환과 hint 서명 경계를 검증한다.
