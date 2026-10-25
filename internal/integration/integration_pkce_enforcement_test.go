@@ -199,8 +199,13 @@ func TestAuthorizePKCEMethodValidation(t *testing.T) {
 						if storedCount != 0 {
 							t.Fatalf("rejected request persisted %d rows, want 0", storedCount)
 						}
-						if client.skipPKCE && loc.Query().Get("error_description") != "unsupported code_challenge_method" {
-							t.Fatalf("expected unsupported method error, got %s", loc)
+						if client.skipPKCE {
+							// The provider owns the explanatory prose. Preserve the
+							// method-specific reason without echoing caller input.
+							description := loc.Query().Get("error_description")
+							if !strings.Contains(description, "code_challenge_method") || strings.Contains(description, tc.method) {
+								t.Fatalf("expected unsupported method error without caller input, got %s", loc)
+							}
 						}
 						return
 					}
