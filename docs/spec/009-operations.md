@@ -560,13 +560,17 @@ attestation을 검증한 뒤 승격해야 한다.
 Dependabot은 매주 월요일 `Asia/Seoul` 기준으로 업데이트를 제안한다.
 기존 7일 cooldown, Dependency Review, govulncheck, CodeQL 설정은 유지한다.
 
-Go 모듈과 Docker builder는 보안 패치 버전 `1.26.10`를 사용한다. CI의
+Go 모듈과 Docker builder는 보안 패치 버전 `1.26.10`을 사용한다. CI의
 `Vulnerability Check`는 루트 모듈과 별도 모듈인 `examples/cli`,
 `examples/mcp-server`, `examples/webapp`을 각각 검사하고 예제 테스트도 실행한다.
 `1.26.10`은 CVE-2026-111943의 `crypto/x509` 인증서 신뢰 수정 사항을 포함한다.
 Go 모듈의 최소 패치 버전과 두 Docker builder를 함께 고정해 CI와 게시 이미지에
 동일한 보안 수정이 적용되도록 한다. 런타임 기반 이미지만 교체해도 정적으로
 링크된 Go 표준 라이브러리는 갱신되지 않으므로 바이너리를 다시 빌드해야 한다.
+`zitadel/oidc v3.51.16`은 상위 IdP용 PKCE verifier를 32개 무작위 바이트로
+생성하고, 미지원 `code_challenge_method`를 요청 저장 전에 거부한다.
+Storage의 S256 요구와 confidential Browser의 `skip_pkce` 호환 검사는 유지한다.
+오류 코드는 `invalid_request`이며 provider가 설명 문구를 소유한다.
 `go-jose v4.1.6`부터 RSA JWK의 modulus는 최대 4096비트다. 상위 IdP의 JWKS와
 수동으로 제공하는 서명 키를 교체할 때 이 제한과의 호환성을 확인한다.
 
