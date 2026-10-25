@@ -1,3 +1,3 @@
 module github.com/kangheeyong/authgate/examples/cli
 
-go 1.26.9
+go 1.26.10
