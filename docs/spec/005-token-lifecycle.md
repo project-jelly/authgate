@@ -41,7 +41,7 @@ resource 사전 검증 오류와 HTTP 429에 같은 헤더가 포함된다.
 
 zitadel 라이브러리는 access_token·id_token을 모두 `typ=JWT`로 서명한다.
 RFC 9068 §2.1은 JWT access_token이 `typ=at+jwt`를 갖도록 요구하므로,
-`/oauth/token` 응답은 미들웨어(`storage.WrapAccessTokenJWTType`)에서
+`/oauth/token` 응답은 미들웨어(`middleware.WrapAccessTokenJWTType`)에서
 access_token을 `typ=at+jwt`로 **재서명**한다 (id_token은 `typ=JWT` 유지).
 
 access_token 문자열이 재서명으로 바뀌면 id_token의 `at_hash`

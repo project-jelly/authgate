@@ -133,8 +133,9 @@ custom release-evidence의 이벤트·호스팅 runner 조건과 SLSA build type
 
 `integration_access_token_validation_test.go`는 실제 발급/refresh 토큰으로
 UserInfo의 용도·서명·필수 claims·audience·scope와 introspection의 client 결합을
-검증한다. `access_token_validation_test.go`는 검증되지 않은 Storage callback과
-재서명 실패 시 토큰 노출을 막는다. app route 테스트는 UserInfo adapter 연결도 확인한다.
+검증한다. `storage/access_token_validation_test.go`는 검증되지 않은 Storage callback을
+거부한다. `middleware/access_token_typ_test.go`는 잘못된 응답 또는 서명 키 조회 실패 시
+원본 토큰 노출을 막는지 검증한다. app route 테스트는 UserInfo adapter 연결도 확인한다.
 `app/routes_integration_test.go`는 실제 app 라우트 등록 함수에 real provider와
 PostgreSQL Storage를 연결해 `at+jwt` 허용·`JWT` 거부·openid-only 반환을 확인한다.
 같은 파일의 `TestProviderRoutes_TokenResponsesAreNotCacheable`은 code·refresh·device

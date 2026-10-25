@@ -1,4 +1,4 @@
-package storage
+package middleware
 
 import (
 	"bytes"
@@ -14,6 +14,10 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 )
+
+type signingKeySource interface {
+	SigningKey(context.Context) (op.SigningKey, error)
+}
 
 // WrapAccessTokenJWTType wraps the OIDC token endpoint and normalizes the
 // JWT access token profile: it rewrites the JOSE `typ` header to `at+jwt`
@@ -32,14 +36,14 @@ import (
 //
 // Rewrite failure returns server_error without disclosing any tokens. A grant
 // already committed by the provider stays consumed; signing is outside its DB tx.
-func WrapAccessTokenJWTType(inner http.Handler, store *Storage) http.Handler {
+func WrapAccessTokenJWTType(inner http.Handler, keys signingKeySource) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := newCaptureRW(w)
 		inner.ServeHTTP(rec, r)
 
 		body := rec.body.Bytes()
 		if rec.code == http.StatusOK && len(body) > 0 {
-			upgraded, err := upgradeAccessTokenTyp(r.Context(), store, body)
+			upgraded, err := upgradeAccessTokenTyp(r.Context(), keys, body)
 			switch err {
 			case nil:
 				body = upgraded
@@ -68,10 +72,10 @@ func WrapAccessTokenJWTType(inner http.Handler, store *Storage) http.Handler {
 
 // upgradeAccessTokenTyp parses a token-endpoint JSON response, locates
 // the `access_token` field, and if it is a compact JWS, re-signs the payload
-// with typ=at+jwt using the storage's signing key. It also adds a JWT `scope`
+// with typ=at+jwt using the supplied signing key source. It also adds a JWT `scope`
 // claim from the token response when one is available and missing from the
 // access token. Returns the modified body or an error; errors must never release the original tokens.
-func upgradeAccessTokenTyp(ctx context.Context, store *Storage, body []byte) ([]byte, error) {
+func upgradeAccessTokenTyp(ctx context.Context, keys signingKeySource, body []byte) ([]byte, error) {
 	var resp map[string]json.RawMessage
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
@@ -110,7 +114,7 @@ func upgradeAccessTokenTyp(ctx context.Context, store *Storage, body []byte) ([]
 		return nil, err
 	}
 
-	sk, err := store.SigningKey(ctx)
+	sk, err := keys.SigningKey(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +192,7 @@ func rebindIDTokenAtHash(sk op.SigningKey, resp map[string]json.RawMessage, acce
 	return nil
 }
 
-// signJWS signs a JWT payload with the storage signing key under the given
+// signJWS signs a JWT payload with the supplied signing key under the given
 // JOSE typ header and returns the compact serialization.
 func signJWS(sk op.SigningKey, payload []byte, typ string) (string, error) {
 	signer, err := jose.NewSigner(jose.SigningKey{
