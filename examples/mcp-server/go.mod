@@ -3,7 +3,7 @@ module github.com/kangheeyong/authgate/examples/mcp-server
 go 1.26.10
 
 require (
-	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/go-jose/go-jose/v4 v4.1.7
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 )
 
